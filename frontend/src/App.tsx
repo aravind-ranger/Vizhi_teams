@@ -1,4 +1,4 @@
-import React from 'react';
+import React from 'react'; // App Component
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './store/useAuthStore';
@@ -69,9 +69,8 @@ function App() {
       />
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-        <Route path="/dashboard" element={
+        <Route path="/" element={
           <ProtectedRoute>
             <Dashboard />
           </ProtectedRoute>

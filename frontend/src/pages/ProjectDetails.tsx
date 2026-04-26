@@ -12,9 +12,9 @@ import {
   PointerSensor, 
   useSensor, 
   useSensors,
-  DragStartEvent,
-  DragOverEvent,
-  DragEndEvent
+  type DragStartEvent,
+  type DragOverEvent,
+  type DragEndEvent
 } from '@dnd-kit/core';
 import { 
   arrayMove, 

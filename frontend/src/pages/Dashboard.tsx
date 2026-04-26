@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; // Dashboard Component
 import {
   CheckCircle2, Clock, Briefcase, PlayCircle,
   ArrowRight, Plus, Timer, Lock, AlertTriangle, Zap,

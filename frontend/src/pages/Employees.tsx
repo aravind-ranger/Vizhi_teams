@@ -93,7 +93,7 @@ const Employees: React.FC = () => {
 
               <div className="relative z-10 flex flex-col h-full">
                 <div className="flex justify-between items-start mb-8">
-                  <Avatar name={employee.name} size="xl" src={employee.avatar_url} className="ring-4 ring-white shadow-xl" />
+                  <Avatar name={employee.name} size="xl" url={employee.avatar_url} className="ring-4 ring-white shadow-xl" />
                   <button className="p-2 hover:bg-white/50 rounded-2xl transition-colors">
                     <MoreHorizontal className="w-5 h-5 text-text-muted" />
                   </button>
