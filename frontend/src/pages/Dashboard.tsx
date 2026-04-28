@@ -14,12 +14,13 @@ import { useTitle } from '../hooks/useTitle';
 import ProgressBar from '../components/ProgressBar';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
-import api from '../services/api';
+import { db, auth } from '../firebase';
+import { collection, query, where, getDocs, limit, orderBy, doc, updateDoc, serverTimestamp, getCountFromServer, writeBatch } from 'firebase/firestore';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const { attendance, isBlocked, checkIn, checkOut, refresh: refreshAttendance } = useAttendance();
+  const { todayRecord: attendance, isBlocked, checkIn, checkOut, refresh: refreshAttendance } = useAttendance();
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [tasks, setTasks] = useState<any[]>([]);
@@ -29,19 +30,52 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [user]);
 
   const fetchDashboardData = async () => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      const [statsRes, tasksRes] = await Promise.all([
-        api.get('/dashboard'),
-        api.get('/tasks')
+      // 1. Fetch Tasks
+      const tasksRef = collection(db, 'tasks');
+      const qTasks = query(
+        tasksRef,
+        where('assigned_to', '==', user.id),
+        orderBy('created_at', 'desc'),
+        limit(3)
+      );
+      const tasksSnap = await getDocs(qTasks);
+      const tasksData = tasksSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setTasks(tasksData);
+
+      // 2. Calculate Stats
+      const qTotal = query(tasksRef, where('assigned_to', '==', user.id));
+      const qInProgress = query(tasksRef, where('assigned_to', '==', user.id), where('status', '==', 'in_progress'));
+      
+      const [totalCount, inProgressCount] = await Promise.all([
+        getCountFromServer(qTotal),
+        getCountFromServer(qInProgress)
       ]);
-      setStats(statsRes.data);
-      setTasks(tasksRes.data.slice(0, 3));
+
+      // 3. Fetch Minutes Today from Attendance
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const attRef = collection(db, 'attendance');
+      const qAtt = query(attRef, where('user_id', '==', user.id), where('created_at', '>=', today));
+      const attSnap = await getDocs(qAtt);
+      let minutesToday = 0;
+      attSnap.forEach(doc => {
+        minutesToday += doc.data().duration_minutes || 0;
+      });
+
+      setStats({
+        total_tasks: totalCount.data().count,
+        in_progress: inProgressCount.data().count,
+        minutes_today: minutesToday
+      });
+
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching dashboard data:', err);
     } finally {
       setIsLoading(false);
     }
@@ -49,10 +83,17 @@ const Dashboard: React.FC = () => {
 
   const toggleTimer = async (taskId: string, isActive: boolean) => {
     try {
+      const taskRef = doc(db, 'tasks', taskId);
       if (isActive) {
-        await api.post(`/tasks/${taskId}/stop`);
+        await updateDoc(taskRef, {
+          active_session_id: null,
+          status: 'todo' // or keep as in_progress
+        });
       } else {
-        await api.post(`/tasks/${taskId}/start`);
+        await updateDoc(taskRef, {
+          active_session_id: 'active', // simplified for now
+          status: 'in_progress'
+        });
       }
       fetchDashboardData();
     } catch (err: any) {
@@ -61,7 +102,7 @@ const Dashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    if (attendance?.check_in && attendance?.scheduled_checkout && !attendance?.check_out) {
+    if (attendance?.check_in && attendance?.scheduled_checkout && !attendance?.check_out && !attendance?.is_paused) {
       const interval = setInterval(() => {
         const now = new Date();
         const end = new Date(attendance.scheduled_checkout!);
@@ -69,6 +110,9 @@ const Dashboard: React.FC = () => {
         setTimeLeft(diff);
       }, 1000);
       return () => clearInterval(interval);
+    } else if (attendance?.is_paused) {
+      // If paused, keep the current timeLeft or calculate it up to the pause point
+      // For simplicity, we just don't start the interval, effectively "freezing" the last value
     } else {
       setTimeLeft(null);
     }
@@ -122,8 +166,28 @@ const Dashboard: React.FC = () => {
                 key={s.id}
                 onClick={async () => {
                   try {
-                    await api.patch('/users/status', { status: s.id });
+                    const userRef = doc(db, 'users', user!.id);
+                    await updateDoc(userRef, { availability_status: s.id });
                     setCurrentStatus(s.id);
+
+                    // Broadcast notification to all other users
+                    const usersSnap = await getDocs(collection(db, 'users'));
+                    const batch = writeBatch(db);
+                    usersSnap.docs.forEach(u => {
+                      if (u.id !== user!.id) {
+                        const notifRef = doc(collection(db, 'notifications'));
+                        batch.set(notifRef, {
+                          user_id: u.id,
+                          title: `Status: ${user!.name} is ${s.label}`,
+                          message: `${user!.name} has changed their status to ${s.label}`,
+                          type: 'status_change',
+                          is_read: false,
+                          created_at: serverTimestamp()
+                        });
+                      }
+                    });
+                    await batch.commit();
+
                     toast.success(`Status updated to ${s.label}`);
                   } catch (err) {
                     toast.error('Failed to update status');

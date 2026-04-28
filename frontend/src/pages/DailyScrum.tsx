@@ -1,13 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Send, Clock, User, Filter, Calendar as CalendarIcon, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTitle } from '../hooks/useTitle';
 import Avatar from '../components/Avatar';
+import { db } from '../firebase';
+import { collection, query, getDocs, addDoc, serverTimestamp, orderBy, where } from 'firebase/firestore';
 
 const DailyScrum: React.FC = () => {
   const { user } = useAuthStore();
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   useTitle('Daily Scrum');
   const [form, setForm] = useState({
     yesterday: '',
@@ -15,14 +19,45 @@ const DailyScrum: React.FC = () => {
     blockers: ''
   });
 
-  const [history] = useState([
-    { date: '2026-04-24', yesterday: 'Completed backend auth', today: 'Working on dashboard UI', blockers: 'None' },
-    { date: '2026-04-23', yesterday: 'Setup database schema', today: 'Backend API implementation', blockers: 'Waiting for SMTP creds' },
-  ]);
+  useEffect(() => {
+    fetchHistory();
+  }, [user]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const fetchHistory = async () => {
+    if (!user) return;
+    try {
+      const q = query(
+        collection(db, 'scrums'),
+        where('user_id', '==', user.id),
+        orderBy('created_at', 'desc')
+      );
+      const snap = await getDocs(q);
+      setHistory(snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().created_at?.toDate()?.toISOString() || new Date().toISOString()
+      })));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitted(true);
+    try {
+      await addDoc(collection(db, 'scrums'), {
+        ...form,
+        user_id: user?.id,
+        user_name: user?.name,
+        created_at: serverTimestamp()
+      });
+      setIsSubmitted(true);
+      fetchHistory();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (

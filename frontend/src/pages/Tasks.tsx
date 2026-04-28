@@ -6,17 +6,20 @@ import {
   ChevronRight, ArrowRight, Save, Link
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import api from '../services/api';
+import { db } from '../firebase';
+import { collection, query, getDocs, addDoc, updateDoc, doc, serverTimestamp, orderBy, where, getDoc, onSnapshot } from 'firebase/firestore';
 import { useTitle } from '../hooks/useTitle';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
 import Avatar from '../components/Avatar';
+import { useAuthStore } from '../store/useAuthStore';
+import { useAttendanceStore } from '../store/useAttendanceStore';
 
 interface Task {
   id: string;
   title: string;
   description: string;
-  status: 'todo' | 'in_progress' | 'review' | 'done';
+  status: 'todo' | 'in_progress' | 'review' | 'done' | 'paused_by_break';
   priority: 'low' | 'medium' | 'high';
   project_name: string;
   project_id: string;
@@ -28,21 +31,26 @@ interface Task {
   task_code?: string;
   active_session_id: string | null;
   active_session_start?: string;
+  is_approved: boolean;
+  is_paused_by_break?: boolean;
 }
 
 const LiveTimer: React.FC<{ start: string; baseMinutes: number }> = ({ start, baseMinutes }) => {
+  const { isPaused } = useAttendanceStore();
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
+    if (isPaused) return;
+
     const startTime = new Date(start).getTime();
     const interval = setInterval(() => {
       const now = new Date().getTime();
       setElapsed(Math.floor((now - startTime) / 1000));
     }, 1000);
     return () => clearInterval(interval);
-  }, [start]);
+  }, [start, isPaused]);
 
-  const totalSeconds = (baseMinutes * 60) + elapsed;
+  const totalSeconds = ((baseMinutes || 0) * 60) + (elapsed || 0);
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
@@ -55,6 +63,7 @@ const LiveTimer: React.FC<{ start: string; baseMinutes: number }> = ({ start, ba
 };
 
 const Tasks: React.FC = () => {
+  const { user } = useAuthStore();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
   const [isLoading, setIsLoading] = useState(true);
@@ -84,33 +93,95 @@ const Tasks: React.FC = () => {
   }, [form]);
 
   useEffect(() => {
-    fetchTasks();
     fetchMetadata();
+    
+    // Real-time listener for tasks
+    const tasksRef = collection(db, 'tasks');
+    const q = query(tasksRef, orderBy('created_at', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const tasksData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        due_date: doc.data().due_date?.toDate?.()?.toISOString() || doc.data().due_date,
+        active_session_start: doc.data().active_session_start?.toDate?.()?.toISOString() || doc.data().active_session_start,
+      })) as Task[];
+      
+      setTasks(tasksData);
+      setIsLoading(false);
+      
+      // Update selected task if open
+      setSelectedTask(prev => {
+        if (!prev) return null;
+        return tasksData.find(t => t.id === prev.id) || prev;
+      });
+    }, (err) => {
+      console.error('Task listener error:', err);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const fetchTasks = async () => {
-    try {
-      const response = await api.get('/tasks');
-      setTasks(response.data);
-      if (selectedTask) {
-        const updated = response.data.find((t: Task) => t.id === selectedTask.id);
-        if (updated) setSelectedTask(updated);
+  // Sync tasks with Attendance Breaks
+  const { isPaused, attendance } = useAttendanceStore();
+
+  useEffect(() => {
+    const syncBreakWithTasks = async () => {
+      // Find tasks that need syncing
+      const activeTask = tasks.find(t => t.active_session_id === 'active');
+      const autoPausedTask = tasks.find(t => t.is_paused_by_break === true);
+
+      if (isPaused && activeTask) {
+        // Automatically pause the active task when break starts
+        const taskRef = doc(db, 'tasks', activeTask.id);
+        const startTime = new Date(activeTask.active_session_start!).getTime();
+        const durationMinutes = Math.floor((new Date().getTime() - startTime) / 60000);
+
+        await addDoc(collection(db, 'task_sessions'), {
+          task_id: activeTask.id,
+          user_id: user?.id,
+          start_time: activeTask.active_session_start,
+          end_time: serverTimestamp(),
+          duration_minutes: durationMinutes,
+          project_id: activeTask.project_id,
+          type: 'break_auto_pause'
+        });
+
+        await updateDoc(taskRef, {
+          active_session_id: null,
+          active_session_start: null,
+          is_paused_by_break: true,
+          total_minutes_logged: (activeTask.total_minutes_logged || 0) + durationMinutes
+        });
+        toast('Timer frozen for break', { icon: '❄️' });
+      } 
+      else if (!isPaused && autoPausedTask) {
+        // Automatically resume the task when break ends
+        const taskRef = doc(db, 'tasks', autoPausedTask.id);
+        await updateDoc(taskRef, {
+          active_session_id: 'active',
+          active_session_start: serverTimestamp(),
+          is_paused_by_break: false
+        });
+        toast('Timer resumed!', { icon: '▶️' });
       }
-    } catch (err) {
-      toast.error('Failed to load tasks');
-    } finally {
-      setIsLoading(false);
+    };
+
+    if (tasks.length > 0) {
+      syncBreakWithTasks();
     }
-  };
+  }, [isPaused, tasks.length, user?.id]);
 
   const fetchMetadata = async () => {
     try {
-      const [projRes, empRes] = await Promise.all([
-        api.get('/projects'),
-        api.get('/employees')
-      ]);
-      setProjects(projRes.data);
-      setEmployees(empRes.data);
+      // Fetch Projects
+      const projSnap = await getDocs(collection(db, 'projects'));
+      setProjects(projSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      
+      // Fetch Employees
+      const empSnap = await getDocs(collection(db, 'users'));
+      setEmployees(empSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (err) {
       console.error(err);
     }
@@ -119,38 +190,100 @@ const Tasks: React.FC = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/tasks', form);
-      toast.success('Task created successfully');
+      const project = projects.find(p => p.id === form.project_id);
+      const assignee = employees.find(emp => emp.id === form.assigned_to);
+      
+      const newTask = {
+        ...form,
+        project_name: project?.name || 'Unknown Project',
+        assignee_name: assignee?.name || 'Unassigned',
+        status: 'todo',
+        total_minutes_logged: 0,
+        active_session_id: null,
+        is_approved: user?.role === 'admin', // Only admin tasks are auto-approved
+        created_at: serverTimestamp()
+      };
+
+      await addDoc(collection(db, 'tasks'), newTask);
+
+      toast.success('Task allotted successfully!');
       setShowCreateModal(false);
       setForm({ title: '', description: '', project_id: '', assigned_to: '', priority: 'medium', due_date: '', estimated_hours: 0 });
-      localStorage.removeItem('task_form_backup');
-      fetchTasks();
     } catch (err) {
+      console.error(err);
       toast.error('Failed to create task');
+    }
+  };
+
+  const approveTask = async (taskId: string) => {
+    try {
+      await updateDoc(doc(db, 'tasks', taskId), { is_approved: true });
+      toast.success('Task approved!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to approve task');
     }
   };
 
   const toggleTimer = async (taskId: string, isActive: boolean) => {
     try {
+      const taskRef = doc(db, 'tasks', taskId);
+      const taskSnap = await getDoc(taskRef);
+      const data = taskSnap.data();
+
+      if (!data?.is_approved && !isActive) {
+        toast.error('This task needs admin approval before starting.');
+        return;
+      }
+
       if (isActive) {
-        await api.post(`/tasks/${taskId}/stop`);
+        // Stop timer
+        if (data?.active_session_start) {
+          const startTime = data.active_session_start.toDate();
+          const durationMinutes = Math.floor((new Date().getTime() - startTime.getTime()) / 60000);
+          
+          // Log the session
+          await addDoc(collection(db, 'task_sessions'), {
+            task_id: taskId,
+            user_id: user?.id,
+            start_time: data.active_session_start,
+            end_time: serverTimestamp(),
+            duration_minutes: durationMinutes,
+            project_id: data.project_id
+          });
+
+          await updateDoc(taskRef, {
+            active_session_id: null,
+            active_session_start: null,
+            total_minutes_logged: (data.total_minutes_logged || 0) + durationMinutes
+          });
+        }
         toast.success('Timer stopped');
       } else {
-        await api.post(`/tasks/${taskId}/start`);
+        // Start timer
+        await updateDoc(taskRef, {
+          active_session_id: 'active',
+          active_session_start: serverTimestamp(),
+          status: 'in_progress'
+        });
         toast.success('Timer started');
+        
+        // If they were on break, resume attendance too? 
+        // No, let's keep it separate for now or ask user.
       }
-      fetchTasks();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to toggle timer');
+      console.error(err);
+      toast.error('Failed to toggle timer');
     }
   };
 
   const updateStatus = async (taskId: string, newStatus: string) => {
     try {
-      await api.patch(`/tasks/${taskId}/status`, { status: newStatus });
+      const taskRef = doc(db, 'tasks', taskId);
+      await updateDoc(taskRef, { status: newStatus });
       toast.success(`Task moved to ${newStatus.replace('_', ' ')}`);
-      fetchTasks();
     } catch (err) {
+      console.error(err);
       toast.error('Failed to update task status');
     }
   };
@@ -161,10 +294,14 @@ const Tasks: React.FC = () => {
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
   };
 
-  const filteredTasks = tasks.filter(t => 
-    t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    t.project_name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredTasks = tasks.filter(t => {
+    const matchesSearch = t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         t.project_name?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Admin sees everything, employees only see their assigned tasks
+    if (user?.role === 'admin') return matchesSearch;
+    return matchesSearch && t.assigned_to === user?.id;
+  });
 
   const columns = [
     { id: 'todo', title: 'To Do', icon: Clock, color: 'text-gray-400', zone: 'bg-gray-50' },
@@ -197,10 +334,10 @@ const Tasks: React.FC = () => {
           </div>
           <button 
             onClick={() => setShowCreateModal(true)}
-            className="btn-primary h-12 px-6 flex items-center shadow-lg shadow-primary/25 hover:scale-105 transition-transform"
+            className="flex items-center space-x-3 px-6 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
           >
-            <Plus className="w-5 h-5 mr-2" />
-            Create Task
+            <Plus className="w-5 h-5" />
+            <span>New Task</span>
           </button>
         </div>
       </div>
@@ -262,15 +399,48 @@ const Tasks: React.FC = () => {
                       <PriorityBadge priority={task.priority} />
                     </div>
 
-                    <h4 className="font-bold text-base text-text-primary mb-6 group-hover:text-primary transition-colors line-clamp-2 leading-snug">
+                    <h4 className="font-bold text-base text-text-primary mb-3 group-hover:text-primary transition-colors line-clamp-2 leading-snug">
                       {task.title}
                     </h4>
 
+                    {task.is_paused_by_break && (
+                      <div className="mb-4 py-2 px-4 bg-amber-50 text-amber-600 text-[10px] font-black rounded-xl text-center uppercase tracking-widest border border-amber-200 animate-pulse">
+                        ⏸ Timer Frozen (Break)
+                      </div>
+                    )}
+
+                    {!task.is_approved && (
+                      <div className="mb-4">
+                        {user?.role === 'admin' ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); approveTask(task.id); }}
+                            className="w-full py-2 px-4 bg-success/10 text-success text-xs font-black rounded-xl hover:bg-success hover:text-white transition-all uppercase tracking-widest"
+                          >
+                            ✓ Approve Task
+                          </button>
+                        ) : (
+                          <div className="py-2 px-4 bg-amber-50 text-amber-600 text-[10px] font-black rounded-xl text-center uppercase tracking-widest">
+                            ⏳ Awaiting Admin Approval
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between mt-auto">
                       <div className="flex items-center space-x-3">
-                        <div className={`p-2.5 rounded-xl transition-all ${task.active_session_id ? 'bg-danger text-white animate-pulse' : 'bg-gray-50 text-gray-400 group-hover:bg-primary/10 group-hover:text-primary'}`}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleTimer(task.id, !!task.active_session_id); }}
+                          disabled={!task.is_approved}
+                          className={`p-2.5 rounded-xl transition-all ${
+                            !task.is_approved 
+                              ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                              : task.active_session_id 
+                                ? 'bg-danger text-white animate-pulse' 
+                                : 'bg-gray-50 text-gray-400 group-hover:bg-primary/10 group-hover:text-primary'
+                          }`}
+                        >
                           {task.active_session_id ? <TimerIcon className="w-4 h-4 animate-spin-slow" /> : <Play className="w-4 h-4 fill-current" />}
-                        </div>
+                        </button>
                         <div className="flex flex-col">
                           <span className="text-[10px] font-black text-text-muted uppercase tracking-tighter">Time Tracked</span>
                           <span className="text-xs font-bold text-text-primary">
@@ -280,7 +450,7 @@ const Tasks: React.FC = () => {
                           </span>
                         </div>
                       </div>
-                      <Avatar name={task.assignee_name} size="xs" className="ring-2 ring-white shadow-sm" />
+                      <Avatar name={task.assignee_name || ''} size="xs" className="ring-2 ring-white shadow-sm" />
                     </div>
                   </div>
                 ))}
@@ -333,16 +503,30 @@ const Tasks: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-8 py-6 text-center">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); toggleTimer(task.id, !!task.active_session_id); }}
-                      className={`p-3 rounded-xl transition-all shadow-sm ${
-                        task.active_session_id 
-                        ? 'bg-danger text-white hover:bg-danger-hover' 
-                        : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'
-                      }`}
-                    >
-                      {task.active_session_id ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
-                    </button>
+                    {!task.is_approved ? (
+                      <div className="flex flex-col items-center">
+                        <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg uppercase tracking-tighter">Awaiting Approval</span>
+                        {user?.role === 'admin' && (
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); approveTask(task.id); }}
+                            className="mt-2 text-[10px] font-black text-success hover:underline"
+                          >
+                            Approve Now
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); toggleTimer(task.id, !!task.active_session_id); }}
+                        className={`p-3 rounded-xl transition-all shadow-sm ${
+                          task.active_session_id 
+                          ? 'bg-danger text-white hover:bg-danger-hover' 
+                          : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'
+                        }`}
+                      >
+                        {task.active_session_id ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

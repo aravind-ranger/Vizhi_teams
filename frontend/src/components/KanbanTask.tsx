@@ -14,6 +14,9 @@ interface Task {
   priority: 'low' | 'medium' | 'high';
   assignee_name: string;
   due_date: string;
+  is_approved?: boolean;
+  is_paused_by_break?: boolean;
+  active_session_id?: string | null;
 }
 
 interface KanbanTaskProps {
@@ -73,6 +76,18 @@ const KanbanTask: React.FC<KanbanTaskProps> = ({ task, isOverlay }) => {
       <h4 className="font-bold text-text-primary text-sm group-hover:text-primary transition-colors mb-2 line-clamp-2">
         {task.title}
       </h4>
+
+      {task.is_paused_by_break && (
+        <div className="mb-3 py-1.5 px-3 bg-amber-50 text-amber-600 text-[9px] font-black rounded-lg text-center uppercase tracking-widest border border-amber-200 animate-pulse">
+          ⏸ Timer Frozen
+        </div>
+      )}
+
+      {!task.is_approved && (
+        <div className="mb-3 py-1.5 px-3 bg-red-50 text-red-600 text-[9px] font-black rounded-lg text-center uppercase tracking-widest border border-red-100">
+          ⏳ Awaiting Approval
+        </div>
+      )}
 
       <div className="flex items-center justify-between mt-4">
         <div className="flex items-center space-x-3">

@@ -1,9 +1,13 @@
 import React from 'react'; // App Component
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, toast } from 'react-hot-toast';
 import { useAuthStore } from './store/useAuthStore';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
+import { db } from './firebase';
+import { auth } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 
 // Pages (to be created)
 const Login = React.lazy(() => import('./pages/Login'));
@@ -49,6 +53,59 @@ const ProtectedRoute = ({ children, roles }: { children: React.ReactNode, roles?
 };
 
 function App() {
+  const { setAuth, logout } = useAuthStore();
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: any) => {
+      try {
+        if (firebaseUser) {
+          console.log('[Auth] User detected:', firebaseUser.uid);
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+
+          if (userDoc.exists()) {
+            console.log('[Auth] Profile found:', userDoc.data());
+            const userData = userDoc.data();
+            const token = await firebaseUser.getIdToken();
+            setAuth({
+              id: firebaseUser.uid,
+              name: userData.name || firebaseUser.displayName || 'User',
+              email: firebaseUser.email!,
+              role: userData.role || 'employee',
+              department: userData.department,
+              avatar_url: userData.avatar_url || firebaseUser.photoURL || undefined,
+              is_active: userData.is_active ?? true,
+              is_verified: userData.is_verified ?? true,
+            }, token);
+          } else {
+            console.error('[Auth] Profile NOT found in Firestore for UID:', firebaseUser.uid);
+            toast.error(`Profile not found in database. Check Firestore collection "users" for document: ${firebaseUser.uid}`);
+            logout();
+          }
+        } else {
+          console.log('[Auth] No user detected');
+          logout();
+        }
+      } catch (err: any) {
+        console.error('[Auth] Error fetching profile:', err);
+        toast.error('Error connecting to database');
+        logout();
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [setAuth, logout]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FDFDFD]">
+        <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <BrowserRouter>
       <Toaster

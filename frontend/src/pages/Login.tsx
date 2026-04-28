@@ -16,12 +16,40 @@ const Login: React.FC = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const response = await api.post('/auth/login', { email, password });
-      setAuth(response.data.user, response.data.token);
-      toast.success(`Welcome back, ${response.data.user.name.split(' ')[0]}!`);
-      navigate('/');
+      const { signInWithEmailAndPassword } = await import('firebase/auth');
+      const { doc, getDoc } = await import('firebase/firestore');
+      const { auth, db } = await import('../firebase');
+
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
+
+      // Fetch additional user info from Firestore
+      const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+
+      if (userDoc.exists()) {
+        const userData = userDoc.data() as any;
+        const token = await firebaseUser.getIdToken();
+
+        setAuth({
+          id: firebaseUser.uid,
+          name: userData.name || firebaseUser.displayName || 'User',
+          email: firebaseUser.email!,
+          role: userData.role || 'employee',
+          department: userData.department,
+          avatar_url: userData.avatar_url || firebaseUser.photoURL || undefined,
+          is_active: userData.is_active ?? true,
+          is_verified: userData.is_verified ?? true,
+        }, token);
+
+        toast.success(`Welcome back, ${userData.name?.split(' ')[0] || 'User'}!`);
+        navigate('/');
+      } else {
+        toast.error('User profile not found in Firestore');
+        await auth.signOut();
+      }
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Login failed');
+      console.error(err);
+      toast.error(err.message || 'Login failed');
     } finally {
       setIsLoading(false);
     }
@@ -51,8 +79,8 @@ const Login: React.FC = () => {
               <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1">Work Email</label>
               <div className="relative group">
                 <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors" />
-                <input 
-                  type="email" required 
+                <input
+                  type="email" required
                   className="w-full h-14 pl-12 pr-6 bg-gray-50 border-none rounded-2xl focus:ring-4 focus:ring-primary/5 focus:bg-white transition-all outline-none font-bold text-sm"
                   placeholder="name@gmail.com"
                   value={email} onChange={e => setEmail(e.target.value)}
@@ -67,8 +95,8 @@ const Login: React.FC = () => {
               </div>
               <div className="relative group">
                 <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors" />
-                <input 
-                  type="password" required 
+                <input
+                  type="password" required
                   className="w-full h-14 pl-12 pr-6 bg-gray-50 border-none rounded-2xl focus:ring-4 focus:ring-primary/5 focus:bg-white transition-all outline-none font-bold text-sm"
                   placeholder="••••••••"
                   value={password} onChange={e => setPassword(e.target.value)}
@@ -76,8 +104,8 @@ const Login: React.FC = () => {
               </div>
             </div>
 
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={isLoading}
               className="w-full h-16 bg-primary text-white font-black rounded-2xl shadow-2xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center space-x-3 disabled:opacity-70 mt-4"
             >
@@ -93,14 +121,14 @@ const Login: React.FC = () => {
           </form>
 
           <div className="mt-10 flex flex-col items-center space-y-4">
-             <div className="h-px w-12 bg-gray-100" />
-             <div className="flex items-center space-x-2 text-text-muted">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span className="text-[9px] font-black uppercase tracking-[0.2em]">Secure Session</span>
-             </div>
+            <div className="h-px w-12 bg-gray-100" />
+            <div className="flex items-center space-x-2 text-text-muted">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span className="text-[9px] font-black uppercase tracking-[0.2em]">Secure Session</span>
+            </div>
           </div>
         </div>
-        
+
         <p className="text-center mt-10 text-[10px] font-bold text-text-muted uppercase tracking-widest">
           © 2026 Vizhi Teams • Engineering
         </p>

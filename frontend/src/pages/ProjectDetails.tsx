@@ -22,9 +22,13 @@ import {
   sortableKeyboardCoordinates, 
   verticalListSortingStrategy 
 } from '@dnd-kit/sortable';
-import api from '../services/api';
+import { db } from '../firebase';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import KanbanColumn from '../components/KanbanColumn';
 import KanbanTask from '../components/KanbanTask';
+
+import { useAuthStore } from '../store/useAuthStore';
+import { toast } from 'react-hot-toast';
 
 interface Task {
   id: string;
@@ -34,6 +38,7 @@ interface Task {
   status: 'todo' | 'in_progress' | 'review' | 'done';
   priority: 'low' | 'medium' | 'high';
   assignee_name: string;
+  assignee_id: string;
   due_date: string;
 }
 
@@ -47,35 +52,137 @@ const COLUMNS = [
 const ProjectDetails: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const [project, setProject] = useState<any>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Kanban');
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    assigned_to: '',
+    priority: 'medium' as const,
+    due_date: ''
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  useEffect(() => {
-    fetchProjectData();
-  }, [id]);
+  const { isPaused } = useAttendanceStore();
 
-  const fetchProjectData = async () => {
-    setIsLoading(true);
+  useEffect(() => {
+    fetchMetadata();
+    
+    // Real-time listener for project tasks
+    if (!id) return;
+    
+    const projectRef = doc(db, 'projects', id);
+    getDoc(projectRef).then(snap => {
+      if (snap.exists()) setProject({ id: snap.id, ...snap.data() });
+    });
+
+    const tasksRef = collection(db, 'tasks');
+    let qTasks = query(tasksRef, where('project_id', '==', id));
+    
+    if (user?.role !== 'admin') {
+      qTasks = query(tasksRef, where('project_id', '==', id), where('assigned_to', '==', user?.id));
+    }
+
+    const unsubscribe = onSnapshot(qTasks, (snapshot) => {
+      setTasks(snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        due_date: doc.data().due_date?.toDate?.()?.toISOString() || doc.data().due_date,
+        active_session_start: doc.data().active_session_start?.toDate?.()?.toISOString() || doc.data().active_session_start,
+      })) as Task[]);
+    });
+
+    return () => unsubscribe();
+  }, [id, user?.id]);
+
+  // Sync tasks with Attendance Breaks
+  useEffect(() => {
+    const syncBreakWithTasks = async () => {
+      const activeTask = tasks.find(t => (t as any).active_session_id === 'active');
+      const autoPausedTask = tasks.find(t => (t as any).is_paused_by_break === true);
+
+      if (isPaused && activeTask) {
+        const taskRef = doc(db, 'tasks', activeTask.id);
+        const startTime = new Date((activeTask as any).active_session_start!).getTime();
+        const durationMinutes = Math.floor((new Date().getTime() - startTime) / 60000);
+
+        await addDoc(collection(db, 'task_sessions'), {
+          task_id: activeTask.id,
+          user_id: user?.id,
+          start_time: (activeTask as any).active_session_start,
+          end_time: serverTimestamp(),
+          duration_minutes: durationMinutes,
+          project_id: id,
+          type: 'break_auto_pause'
+        });
+
+        await updateDoc(taskRef, {
+          active_session_id: null,
+          active_session_start: null,
+          is_paused_by_break: true,
+          total_minutes_logged: ((activeTask as any).total_minutes_logged || 0) + durationMinutes
+        });
+        toast('Timer frozen for break', { icon: '❄️' });
+      } 
+      else if (!isPaused && autoPausedTask) {
+        const taskRef = doc(db, 'tasks', autoPausedTask.id);
+        await updateDoc(taskRef, {
+          active_session_id: 'active',
+          active_session_start: serverTimestamp(),
+          is_paused_by_break: false
+        });
+        toast('Timer resumed!', { icon: '▶️' });
+      }
+    };
+
+    if (tasks.length > 0) {
+      syncBreakWithTasks();
+    }
+  }, [isPaused, tasks.length]);
+
+  const fetchMetadata = async () => {
+    const empSnap = await getDocs(collection(db, 'users'));
+    setEmployees(empSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+  };
+
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id || !form.title || !form.assigned_to) {
+      toast.error('Please fill all required fields');
+      return;
+    }
     try {
-      const [pRes, tRes] = await Promise.all([
-        api.get(`/projects`), // Simulating single project fetch since I only have list API for now
-        api.get(`/tasks?projectId=${id}`)
-      ]);
-      const p = pRes.data.find((proj: any) => proj.id === id);
-      setProject(p);
-      setTasks(tRes.data);
+      const { addDoc, serverTimestamp } = await import('firebase/firestore');
+      const assignee = employees.find(e => e.id === form.assigned_to);
+      
+      await addDoc(collection(db, 'tasks'), {
+        ...form,
+        project_id: id,
+        project_name: project?.name || 'Project',
+        assignee_name: assignee?.name || 'Unassigned',
+        status: 'todo',
+        total_minutes_logged: 0,
+        active_session_id: null,
+        is_approved: user?.role === 'admin',
+        created_at: serverTimestamp()
+      });
+      
+      toast.success('Task created and assigned!');
+      setShowCreateModal(false);
+      setForm({ title: '', description: '', assigned_to: '', priority: 'medium', due_date: '' });
+      fetchProjectData();
     } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+      toast.error('Failed to create task');
     }
   };
 
@@ -135,9 +242,10 @@ const ProjectDetails: React.FC = () => {
     const newStatus = over.data.current?.task?.status || over.id;
 
     try {
-      await api.put(`/tasks/${taskId}`, { status: newStatus });
+      const taskRef = doc(db, 'tasks', taskId);
+      await updateDoc(taskRef, { status: newStatus });
     } catch (err) {
-      console.error('Failed to update task status', err);
+      console.error('Failed to update task status in Firestore', err);
       fetchProjectData(); // Rollback
     }
   };
@@ -158,7 +266,10 @@ const ProjectDetails: React.FC = () => {
           </div>
           <div className="flex items-center space-x-3">
             <button className="p-2 hover:bg-gray-100 rounded-lg text-text-secondary"><Settings className="w-5 h-5" /></button>
-            <button className="btn-primary flex items-center">
+            <button 
+              onClick={() => setShowCreateModal(true)}
+              className="btn-primary flex items-center"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Add Task
             </button>
@@ -225,6 +336,83 @@ const ProjectDetails: React.FC = () => {
           </DragOverlay>
         </DndContext>
       </div>
+      {/* Create Task Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowCreateModal(false)} />
+          <div className="relative bg-white w-full max-w-xl rounded-[40px] p-10 shadow-2xl animate-scale-up">
+            <h2 className="text-3xl font-black text-text-primary mb-8">Allot New Task</h2>
+            
+            <form onSubmit={handleCreateTask} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Task Title</label>
+                <input 
+                  type="text" required
+                  placeholder="e.g., Design Landing Page"
+                  className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all"
+                  value={form.title}
+                  onChange={(e) => setForm({...form, title: e.target.value})}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Assign Employee</label>
+                <select 
+                  required
+                  className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all appearance-none"
+                  value={form.assigned_to}
+                  onChange={(e) => setForm({...form, assigned_to: e.target.value})}
+                >
+                  <option value="">Select an employee...</option>
+                  {employees.map(emp => (
+                    <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Priority</label>
+                  <select 
+                    className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all"
+                    value={form.priority}
+                    onChange={(e) => setForm({...form, priority: e.target.value as any})}
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Due Date</label>
+                  <input 
+                    type="date"
+                    className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all"
+                    value={form.due_date}
+                    onChange={(e) => setForm({...form, due_date: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="flex space-x-4 pt-6">
+                <button 
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="flex-1 h-14 rounded-2xl font-black text-text-muted uppercase tracking-widest hover:bg-gray-100 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
+                >
+                  Create Task
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
