@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { Lock, Mail, ArrowRight, Zap, ShieldCheck } from 'lucide-react';
+import { Lock, User, ArrowRight, Zap, ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import api from '../services/api';
 
@@ -18,9 +18,11 @@ const Login: React.FC = () => {
     try {
       const { signInWithEmailAndPassword } = await import('firebase/auth');
       const { doc, getDoc } = await import('firebase/firestore');
-      const { auth, db } = await import('../firebase');
+      const { auth, db } = await import('../firebase.ts');
 
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const cleanUsername = email.trim().replace(/\s+/g, '').toLowerCase();
+      const loginEmail = cleanUsername.includes('@') ? cleanUsername : `${cleanUsername}@gmail.com`;
+      const userCredential = await signInWithEmailAndPassword(auth, loginEmail, password);
       const firebaseUser = userCredential.user;
 
       // Fetch additional user info from Firestore
@@ -76,14 +78,14 @@ const Login: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1">Work Email</label>
+              <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1">Username</label>
               <div className="relative group">
-                <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors" />
+                <User className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors" />
                 <input
-                  type="email" required
+                  type="text" required
                   className="w-full h-14 pl-12 pr-6 bg-gray-50 border-none rounded-2xl focus:ring-4 focus:ring-primary/5 focus:bg-white transition-all outline-none font-bold text-sm"
-                  placeholder="name@gmail.com"
-                  value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="Enter your name"
+                  value={email} onChange={e => setEmail(e.target.value.toLowerCase())}
                 />
               </div>
             </div>
@@ -91,7 +93,13 @@ const Login: React.FC = () => {
             <div className="space-y-2">
               <div className="flex justify-between items-center px-1">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Password</label>
-                <a href="#" className="text-[10px] font-black text-primary uppercase tracking-widest hover:underline">Forgot?</a>
+                <button 
+                  type="button"
+                  onClick={() => setPassword(`${email}@123`)}
+                  className="text-[10px] font-black text-primary uppercase tracking-widest hover:underline"
+                >
+                  Use Default
+                </button>
               </div>
               <div className="relative group">
                 <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors" />

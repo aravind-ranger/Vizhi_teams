@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import {
   Search, Mail, Briefcase, MapPin,
   Link, Share2, MoreHorizontal, UserCheck,
-  ExternalLink, Building, ShieldCheck
+  ExternalLink, Building, ShieldCheck, Plus, X
 } from 'lucide-react';
-import { db } from '../firebase.ts';
-import { collection, query, getDocs, orderBy } from 'firebase/firestore';
+import { db, auth } from '../firebase.ts';
+import { collection, query, getDocs, orderBy, addDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { initializeApp } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { toast } from 'react-hot-toast';
 import { useTitle } from '../hooks/useTitle';
 import Avatar from '../components/Avatar';
@@ -27,6 +29,15 @@ const Employees: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newEmp, setNewEmp] = useState({
+    name: '',
+    email: '',
+    role: 'employee' as const,
+    department: '',
+    password: ''
+  });
   useTitle('Team Members');
 
   useEffect(() => {
@@ -47,6 +58,51 @@ const Employees: React.FC = () => {
       toast.error('Failed to load team members');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleAddEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsCreating(true);
+    try {
+      // Use the email provided or generate one if only name is given
+      const loginEmail = newEmp.email.includes('@') ? newEmp.email : `${newEmp.name.replace(/\s+/g, '').toLowerCase()}@gmail.com`;
+      const password = newEmp.password || `${newEmp.name.replace(/\s+/g, '').toLowerCase()}@123`;
+
+      // Create user in Auth (this will log us in as them, so we need to be careful)
+      // Actually, since I don't have secondary app setup easily here, I'll just tell the admin
+      // that for now we add them to Firestore and they can login using the simplified flow.
+      // BUT if I want it to really work, I should use the secondary app.
+      
+      // Let's just add to Firestore for now as "Pre-registered" and I'll explain.
+      // Actually, I'll use a dummy ID for now or skip Auth creation if I can't do it cleanly.
+      
+      // Use a unique name for each secondary app instance to avoid collisions
+      const appName = `secondary-${Date.now()}`;
+      const secondaryApp = initializeApp(auth.app.options, appName);
+      const secondaryAuth = getAuth(secondaryApp);
+      
+      const userCred = await createUserWithEmailAndPassword(secondaryAuth, loginEmail, password);
+      await setDoc(doc(db, 'users', userCred.user.uid), {
+        name: newEmp.name,
+        email: loginEmail,
+        role: newEmp.role,
+        department: newEmp.department,
+        is_active: true,
+        created_at: serverTimestamp(),
+        avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(newEmp.name)}&background=random`
+      });
+
+      await signOut(secondaryAuth);
+      
+      toast.success('Member created successfully!');
+      setShowAddModal(false);
+      fetchEmployees();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || 'Failed to create member');
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -74,7 +130,15 @@ const Employees: React.FC = () => {
           <h2 className="text-3xl font-black text-text-primary tracking-tight">Our People</h2>
           <p className="text-text-muted mt-1 font-medium">The heartbeat of Vizhi Teams</p>
         </div>
-        <div className="relative w-full max-w-md">
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center space-x-3 px-6 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Add Member</span>
+          </button>
+          <div className="relative w-full max-w-md">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
@@ -85,6 +149,7 @@ const Employees: React.FC = () => {
           />
         </div>
       </div>
+    </div>
 
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
@@ -116,7 +181,7 @@ const Employees: React.FC = () => {
                     {employee.role === 'admin' && <ShieldCheck className="w-4 h-4 text-primary" />}
                   </div>
                   <p className="text-sm font-bold text-primary/80 uppercase tracking-widest">
-                    {getTitle(employee.name)}
+                    {getTitle(employee.name) !== 'Team Member' ? getTitle(employee.name) : employee.department}
                   </p>
                 </div>
 
@@ -145,6 +210,86 @@ const Employees: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Add Employee Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !isCreating && setShowAddModal(false)} />
+          <div className="relative bg-white w-full max-w-xl rounded-[40px] p-10 shadow-2xl animate-scale-up">
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-3xl font-black text-text-primary">Add Team Member</h2>
+              <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-all">
+                <X className="w-6 h-6 text-text-muted" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleAddEmployee} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Full Name</label>
+                <input 
+                  type="text" required
+                  placeholder="e.g., Abdul"
+                  className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all outline-none"
+                  value={newEmp.name}
+                  onChange={(e) => setNewEmp({...newEmp, name: e.target.value})}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Department</label>
+                  <input 
+                    type="text" required
+                    placeholder="e.g., Unity Developer"
+                    className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all outline-none"
+                    value={newEmp.department}
+                    onChange={(e) => setNewEmp({...newEmp, department: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Role</label>
+                  <select 
+                    required
+                    className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all appearance-none outline-none"
+                    value={newEmp.role}
+                    onChange={(e) => setNewEmp({...newEmp, role: e.target.value as any})}
+                  >
+                    <option value="employee">Employee</option>
+                    <option value="manager">Manager</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Email (Optional)</label>
+                <input 
+                  type="email"
+                  placeholder="leave empty to auto-generate"
+                  className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all outline-none"
+                  value={newEmp.email}
+                  onChange={(e) => setNewEmp({...newEmp, email: e.target.value})}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isCreating}
+                className="w-full h-16 bg-primary text-white font-black rounded-2xl shadow-2xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center space-x-3 disabled:opacity-70 mt-4"
+              >
+                {isCreating ? (
+                  <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span>Create Member</span>
+                    <Plus className="w-5 h-5" />
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </div>
