@@ -1,13 +1,14 @@
 import React from 'react'; // App Component
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster, toast } from 'react-hot-toast';
+import { Toaster, toast, ToastBar } from 'react-hot-toast';
+import { X } from 'lucide-react';
 import { useAuthStore } from './store/useAuthStore';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import { db } from './firebase';
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 
 // Pages (to be created)
 const Login = React.lazy(() => import('./pages/Login'));
@@ -19,6 +20,7 @@ const Attendance = React.lazy(() => import('./pages/Attendance.tsx'));
 const DailyScrum = React.lazy(() => import('./pages/DailyScrum.tsx'));
 const Reports = React.lazy(() => import('./pages/Reports.tsx'));
 const Tasks = React.lazy(() => import('./pages/Tasks'));
+const CalendarPage = React.lazy(() => import('./pages/Calendar'));
 const FocusMode = React.lazy(() => import('./components/FocusMode'));
 const Leaves = React.lazy(() => import('./pages/Leaves'));
 const Sprints = React.lazy(() => import('./pages/Sprints'));
@@ -35,8 +37,8 @@ const ProtectedRoute = ({ children, roles }: { children: React.ReactNode, roles?
   return (
     <div className="flex bg-background min-h-screen">
       {!isFocusMode && <Sidebar />}
-      <div className={`flex-1 ${!isFocusMode ? 'lg:ml-0' : ''} transition-all duration-250`}>
-        <div className={!isFocusMode ? 'lg:pl-60' : ''}>
+      <div className={`flex-1 transition-all duration-300`}>
+        <div className={!isFocusMode ? 'lg:pl-[280px]' : ''}>
           {!isFocusMode && <TopBar onFocusMode={() => setIsFocusMode(true)} />}
           <main className={!isFocusMode ? 'p-6 pt-2' : ''}>
             {isFocusMode && (
@@ -59,45 +61,53 @@ function App() {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: any) => {
+    let profileUnsubscribe: () => void = () => {};
+
+    const authUnsubscribe = onAuthStateChanged(auth, async (firebaseUser: any) => {
       try {
         if (firebaseUser) {
           console.log('[Auth] User detected:', firebaseUser.uid);
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-
-          if (userDoc.exists()) {
-            console.log('[Auth] Profile found:', userDoc.data());
-            const userData = userDoc.data();
-            const token = await firebaseUser.getIdToken();
-            setAuth({
-              id: firebaseUser.uid,
-              name: userData.name || firebaseUser.displayName || 'User',
-              email: firebaseUser.email!,
-              role: userData.role || 'employee',
-              department: userData.department,
-              avatar_url: userData.avatar_url || firebaseUser.photoURL || undefined,
-              is_active: userData.is_active ?? true,
-              is_verified: userData.is_verified ?? true,
-            }, token);
-          } else {
-            console.error('[Auth] Profile NOT found in Firestore for UID:', firebaseUser.uid);
-            toast.error(`Profile not found in database. Check Firestore collection "users" for document: ${firebaseUser.uid}`);
-            logout();
-          }
+          
+          // Use onSnapshot for real-time profile updates (syncs status, name, etc.)
+          profileUnsubscribe = onSnapshot(doc(db, 'users', firebaseUser.uid), async (userDoc) => {
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              const token = await firebaseUser.getIdToken();
+              setAuth({
+                id: firebaseUser.uid,
+                name: userData.name || firebaseUser.displayName || 'User',
+                email: firebaseUser.email!,
+                role: userData.role || 'employee',
+                department: userData.department,
+                avatar_url: userData.avatar_url || firebaseUser.photoURL || undefined,
+                is_active: userData.is_active ?? true,
+                is_verified: userData.is_verified ?? true,
+                availability_status: userData.availability_status || 'available'
+              }, token);
+              setLoading(false);
+            } else {
+              console.error('[Auth] Profile NOT found in Firestore');
+              toast.error('Profile not found in database.');
+              logout();
+              setLoading(false);
+            }
+          });
         } else {
           console.log('[Auth] No user detected');
           logout();
+          setLoading(false);
         }
       } catch (err: any) {
-        console.error('[Auth] Error fetching profile:', err);
-        toast.error('Error connecting to database');
+        console.error('[Auth] Auth error:', err);
         logout();
-      } finally {
         setLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      authUnsubscribe();
+      profileUnsubscribe();
+    };
   }, [setAuth, logout]);
 
   if (loading) {
@@ -125,7 +135,26 @@ function App() {
             border: '1px solid #F1F5F9'
           }
         }}
-      />
+      >
+        {(t) => (
+          <ToastBar toast={t}>
+            {({ icon, message }) => (
+              <>
+                {icon}
+                <div className="flex-1 px-2">{message}</div>
+                {t.type !== 'loading' && (
+                  <button 
+                    onClick={() => toast.dismiss(t.id)}
+                    className="p-1 hover:bg-gray-100 rounded-lg transition-colors ml-2"
+                  >
+                    <X className="w-4 h-4 text-gray-400" />
+                  </button>
+                )}
+              </>
+            )}
+          </ToastBar>
+        )}
+      </Toaster>
       <Routes>
         <Route path="/login" element={<Login />} />
 
@@ -189,6 +218,11 @@ function App() {
         <Route path="/profile" element={
           <ProtectedRoute>
             <Profile />
+          </ProtectedRoute>
+        } />
+        <Route path="/calendar" element={
+          <ProtectedRoute>
+            <CalendarPage />
           </ProtectedRoute>
         } />
 

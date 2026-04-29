@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { Lock, User, ArrowRight, Zap, ShieldCheck } from 'lucide-react';
+import { Lock, User, ArrowRight, Zap, ShieldCheck, Eye, EyeOff, X, Mail } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import api from '../services/api';
 
@@ -9,6 +9,8 @@ const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
   const { setAuth } = useAuthStore();
   const navigate = useNavigate();
 
@@ -62,13 +64,15 @@ const Login: React.FC = () => {
       <div className="w-full max-w-md">
         {/* Logo Section */}
         <div className="flex flex-col items-center mb-12">
-          <div className="w-16 h-16 bg-primary rounded-3xl flex items-center justify-center shadow-2xl shadow-primary/20 mb-6">
-            <Zap className="w-8 h-8 text-white fill-current" />
+          <div className="w-32 h-32 bg-black rounded-[40px] flex items-center justify-center mb-6 shadow-2xl shadow-black/20 animate-scale-up p-4">
+            <img src="/assets/logo.png" alt="Vizhi" className="w-full h-full object-contain" onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.src = 'https://ui-avatars.com/api/?name=V&background=000&color=fff';
+            }} />
           </div>
-          <h1 className="text-2xl font-black text-text-primary tracking-tighter">VizhiTeams</h1>
-          <p className="text-text-muted text-xs font-bold uppercase tracking-[0.3em] mt-2">Team Portal</p>
+          <h1 className="text-4xl font-black text-text-primary tracking-tighter">VIZHI</h1>
+          <p className="text-text-muted text-[10px] font-black uppercase tracking-[0.5em] mt-3 ml-2">Advanced Engineering</p>
         </div>
-
         {/* Form Section */}
         <div className="bg-white p-10 rounded-[40px] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.06)] border border-gray-50">
           <div className="mb-10 text-center">
@@ -95,20 +99,27 @@ const Login: React.FC = () => {
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Password</label>
                 <button 
                   type="button"
-                  onClick={() => setPassword(`${email}@123`)}
+                  onClick={() => setShowForgotModal(true)}
                   className="text-[10px] font-black text-primary uppercase tracking-widest hover:underline"
                 >
-                  Use Default
+                  Forgot Password?
                 </button>
               </div>
               <div className="relative group">
                 <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors" />
                 <input
-                  type="password" required
-                  className="w-full h-14 pl-12 pr-6 bg-gray-50 border-none rounded-2xl focus:ring-4 focus:ring-primary/5 focus:bg-white transition-all outline-none font-bold text-sm"
+                  type={showPassword ? "text" : "password"} required
+                  className="w-full h-14 pl-12 pr-12 bg-gray-50 border-none rounded-2xl focus:ring-4 focus:ring-primary/5 focus:bg-white transition-all outline-none font-bold text-sm"
                   placeholder="••••••••"
                   value={password} onChange={e => setPassword(e.target.value)}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
@@ -141,6 +152,36 @@ const Login: React.FC = () => {
           © 2026 Vizhi Teams • Engineering
         </p>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgotModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowForgotModal(false)} />
+          <div className="relative bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl animate-scale-up text-center">
+            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
+              <Mail className="w-10 h-10" />
+            </div>
+            <h3 className="text-2xl font-black text-text-primary mb-3">Forgot Password?</h3>
+            <p className="text-text-muted mb-8 font-medium">Please contact the administrator to reset your credentials.</p>
+            <div className="flex flex-col space-y-3">
+              <a
+                href="https://mail.google.com/mail/?view=cm&fs=1&to=kumararavindkumar201@gmail.com&su=Password%20Reset%20Request"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full h-14 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center"
+              >
+                Contact Admin
+              </a>
+              <button
+                onClick={() => setShowForgotModal(false)}
+                className="w-full h-14 text-text-muted font-black uppercase tracking-widest hover:text-text-primary transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

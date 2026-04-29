@@ -2,16 +2,18 @@ import React, { useState, useEffect } from 'react';
 import {
   Search, Mail, Briefcase, MapPin,
   Link, Share2, MoreHorizontal, UserCheck,
-  ExternalLink, Building, ShieldCheck, Plus, X
+  ExternalLink, Building, ShieldCheck, Plus, X, Edit as EditIcon, Trash2
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase.ts';
-import { collection, query, getDocs, orderBy, addDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, addDoc, doc, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { toast } from 'react-hot-toast';
 import { useTitle } from '../hooks/useTitle';
 import Avatar from '../components/Avatar';
 import RoleBadge from '../components/RoleBadge';
+import { useAuthStore } from '../store/useAuthStore';
 
 interface Employee {
   id: string;
@@ -24,12 +26,16 @@ interface Employee {
   created_at: string;
 }
 
-// ... (component start)
 const Employees: React.FC = () => {
+  const { user } = useAuthStore();
+  const navigate = useNavigate();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [newEmp, setNewEmp] = useState({
     name: '',
@@ -73,15 +79,15 @@ const Employees: React.FC = () => {
       // Actually, since I don't have secondary app setup easily here, I'll just tell the admin
       // that for now we add them to Firestore and they can login using the simplified flow.
       // BUT if I want it to really work, I should use the secondary app.
-      
+
       // Let's just add to Firestore for now as "Pre-registered" and I'll explain.
       // Actually, I'll use a dummy ID for now or skip Auth creation if I can't do it cleanly.
-      
+
       // Use a unique name for each secondary app instance to avoid collisions
       const appName = `secondary-${Date.now()}`;
       const secondaryApp = initializeApp(auth.app.options, appName);
       const secondaryAuth = getAuth(secondaryApp);
-      
+
       const userCred = await createUserWithEmailAndPassword(secondaryAuth, loginEmail, password);
       await setDoc(doc(db, 'users', userCred.user.uid), {
         name: newEmp.name,
@@ -94,7 +100,7 @@ const Employees: React.FC = () => {
       });
 
       await signOut(secondaryAuth);
-      
+
       toast.success('Member created successfully!');
       setShowAddModal(false);
       fetchEmployees();
@@ -103,6 +109,20 @@ const Employees: React.FC = () => {
       toast.error(err.message || 'Failed to create member');
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!employeeToDelete) return;
+    try {
+      await deleteDoc(doc(db, 'users', employeeToDelete.id));
+      toast.success(`User ${employeeToDelete.name} deleted successfully`);
+      setShowDeleteModal(false);
+      setEmployeeToDelete(null);
+      fetchEmployees();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete user');
     }
   };
 
@@ -131,25 +151,27 @@ const Employees: React.FC = () => {
           <p className="text-text-muted mt-1 font-medium">The heartbeat of Vizhi Teams</p>
         </div>
         <div className="flex items-center space-x-4">
-          <button 
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center space-x-3 px-6 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Add Member</span>
-          </button>
+          {user?.role === 'admin' && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center space-x-3 px-6 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Add Member</span>
+            </button>
+          )}
           <div className="relative w-full max-w-md">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search by name or department..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full h-14 pl-12 pr-4 glass border-none rounded-[20px] focus:ring-4 focus:ring-primary/10 shadow-sm outline-none font-medium"
-          />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by name or department..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full h-14 pl-12 pr-4 glass border-none rounded-[20px] focus:ring-4 focus:ring-primary/10 shadow-sm outline-none font-medium"
+            />
+          </div>
         </div>
       </div>
-    </div>
 
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
@@ -168,9 +190,32 @@ const Employees: React.FC = () => {
               <div className="relative z-10 flex flex-col h-full">
                 <div className="flex justify-between items-start mb-8">
                   <Avatar name={employee.name} size="xl" url={employee.avatar_url} className="ring-4 ring-white shadow-xl" />
-                  <button className="p-2 hover:bg-white/50 rounded-2xl transition-colors">
-                    <MoreHorizontal className="w-5 h-5 text-text-muted" />
-                  </button>
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuId(openMenuId === employee.id ? null : employee.id);
+                      }}
+                      className="p-2 hover:bg-white/50 rounded-2xl transition-colors"
+                    >
+                      <MoreHorizontal className="w-5 h-5 text-text-muted" />
+                    </button>
+                    {openMenuId === employee.id && user?.role === 'admin' && (
+                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <button
+                          onClick={() => {
+                            setEmployeeToDelete(employee);
+                            setShowDeleteModal(true);
+                            setOpenMenuId(null);
+                          }}
+                          className="w-full flex items-center px-4 py-2.5 text-sm text-danger hover:bg-danger/5 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4 mr-3" />
+                          Delete User
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mb-8">
@@ -224,37 +269,37 @@ const Employees: React.FC = () => {
                 <X className="w-6 h-6 text-text-muted" />
               </button>
             </div>
-            
+
             <form onSubmit={handleAddEmployee} className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Full Name</label>
-                <input 
+                <input
                   type="text" required
-                  placeholder="e.g., Abdul"
+                  placeholder="enter username"
                   className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all outline-none"
                   value={newEmp.name}
-                  onChange={(e) => setNewEmp({...newEmp, name: e.target.value})}
+                  onChange={(e) => setNewEmp({ ...newEmp, name: e.target.value })}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Department</label>
-                  <input 
+                  <input
                     type="text" required
-                    placeholder="e.g., Unity Developer"
+                    placeholder="choose what you want to work on"
                     className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all outline-none"
                     value={newEmp.department}
-                    onChange={(e) => setNewEmp({...newEmp, department: e.target.value})}
+                    onChange={(e) => setNewEmp({ ...newEmp, department: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Role</label>
-                  <select 
+                  <select
                     required
                     className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all appearance-none outline-none"
                     value={newEmp.role}
-                    onChange={(e) => setNewEmp({...newEmp, role: e.target.value as any})}
+                    onChange={(e) => setNewEmp({ ...newEmp, role: e.target.value as any })}
                   >
                     <option value="employee">Employee</option>
                     <option value="manager">Manager</option>
@@ -265,12 +310,12 @@ const Employees: React.FC = () => {
 
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Email (Optional)</label>
-                <input 
+                <input
                   type="email"
-                  placeholder="leave empty to auto-generate"
+                  placeholder="Add your mail id if you want to"
                   className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all outline-none"
                   value={newEmp.email}
-                  onChange={(e) => setNewEmp({...newEmp, email: e.target.value})}
+                  onChange={(e) => setNewEmp({ ...newEmp, email: e.target.value })}
                 />
               </div>
 
@@ -289,6 +334,33 @@ const Employees: React.FC = () => {
                 )}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
+          <div className="relative bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl animate-scale-up text-center">
+            <div className="w-20 h-20 bg-danger/10 rounded-full flex items-center justify-center mx-auto mb-6 text-danger">
+              <Trash2 className="w-10 h-10" />
+            </div>
+            <h3 className="text-2xl font-black text-text-primary mb-3">Delete User?</h3>
+            <p className="text-text-muted mb-8 font-medium">Are you sure you want to delete <span className="text-text-primary font-black">{employeeToDelete?.name}</span>? This action cannot be undone.</p>
+            <div className="flex flex-col space-y-3">
+              <button
+                onClick={handleDeleteUser}
+                className="w-full h-14 bg-danger text-white font-black rounded-2xl shadow-xl shadow-danger/20 hover:scale-[1.02] active:scale-95 transition-all"
+              >
+                Yes, Delete
+              </button>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="w-full h-14 text-text-muted font-black uppercase tracking-widest hover:text-text-primary transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

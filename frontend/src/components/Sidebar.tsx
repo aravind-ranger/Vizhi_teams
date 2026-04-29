@@ -32,6 +32,7 @@ const Sidebar: React.FC = () => {
         { label: 'Team Directory', icon: Users, path: '/employees', roles: ['admin', 'manager', 'employee'] },
         { label: 'Attendance', icon: Calendar, path: '/attendance', roles: ['admin', 'manager', 'employee'] },
         { label: 'Leaves', icon: FileText, path: '/leaves', roles: ['admin', 'manager', 'employee'] },
+        { label: 'Calendar', icon: Calendar, path: '/calendar', roles: ['admin', 'manager', 'employee'] },
       ]
     },
     {
@@ -58,11 +59,13 @@ const Sidebar: React.FC = () => {
   })).filter(section => section.items.length > 0);
 
   return (
-    <div className={`fixed left-0 top-0 h-screen bg-white border-r border-border transition-all duration-250 ease-in-out z-30 flex flex-col ${isCollapsed ? 'w-16' : 'w-[240px]'}`}>
-      {/* Logo */}
-      <div className="h-[60px] flex items-center px-4 border-b border-border">
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-          <span className="text-white font-bold">V</span>
+    <div className={`fixed left-0 top-0 h-screen bg-white border-r border-border transition-all duration-300 ease-in-out z-30 flex flex-col ${isCollapsed ? 'w-20' : 'w-[280px]'}`}>
+      <div className="h-[70px] flex items-center px-6 border-b border-border">
+        <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
+          <img src="/assets/logo.png" alt="Vizhi" className="w-full h-full object-contain" onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.src = 'https://ui-avatars.com/api/?name=V&background=000&color=fff';
+          }} />
         </div>
         {!isCollapsed && (
           <span className="ml-3 font-bold text-lg text-text-primary whitespace-nowrap">Vizhi Teams</span>

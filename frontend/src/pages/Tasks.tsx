@@ -198,6 +198,10 @@ const Tasks: React.FC = () => {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!attendance?.check_in || attendance?.check_out) {
+      toast.error('You must be checked in to create tasks ⚠️');
+      return;
+    }
     try {
       const project = projects.find(p => p.id === form.project_id);
       const assignee = employees.find(emp => emp.id === form.assigned_to);
@@ -214,10 +218,10 @@ const Tasks: React.FC = () => {
         ...form,
         project_name: project?.name || 'Unknown Project',
         assignee_name: assignee?.name || 'Unassigned',
-        status: isAutoApproved ? 'todo' : 'pending',
+        status: 'todo',
         total_minutes_logged: 0,
         active_session_id: null,
-        is_approved: isAutoApproved,
+        is_approved: true,
         task_code: taskCode,
         created_by: user?.id,
         created_at: serverTimestamp()
@@ -235,18 +239,7 @@ const Tasks: React.FC = () => {
         created_at: serverTimestamp()
       });
 
-      if (!isAutoApproved) {
-        await addDoc(collection(db, 'notifications'), {
-          user_id: 'admin',
-          title: 'New Task Approval',
-          message: `${user?.name} created task "${form.title}" — needs your approval`,
-          type: 'approval_request',
-          is_read: false,
-          created_at: serverTimestamp()
-        });
-      }
-
-      toast.success(isAutoApproved ? 'Task allotted!' : 'Task submitted for approval!');
+      toast.success('Task allotted!');
       setShowCreateModal(false);
       setForm({ title: '', description: '', project_id: '', assigned_to: '', priority: 'medium', due_date: '', estimated_hours: 0 });
     } catch (err) {
@@ -355,15 +348,15 @@ const Tasks: React.FC = () => {
   };
 
   const toggleTimer = async (taskId: string, isActive: boolean) => {
+    if (!attendance?.check_in || attendance?.check_out) {
+      toast.error('You must be checked in to work on tasks ⚠️');
+      return;
+    }
+
     try {
       const taskRef = doc(db, 'tasks', taskId);
       const taskSnap = await getDoc(taskRef);
       const data = taskSnap.data();
-
-      if (!data?.is_approved && !isActive) {
-        toast.error('This task needs admin approval before starting.');
-        return;
-      }
 
       if (isActive) {
         // Stop timer
@@ -396,9 +389,6 @@ const Tasks: React.FC = () => {
           status: 'in_progress'
         });
         toast.success('Timer started');
-        
-        // If they were on break, resume attendance too? 
-        // No, let's keep it separate for now or ask user.
       }
     } catch (err: any) {
       console.error(err);
@@ -648,7 +638,7 @@ const Tasks: React.FC = () => {
           ))}
         </div>
       ) : (
-        <div className="glass rounded-[40px] overflow-hidden border-none shadow-sm bg-white/40">
+        <div className="glass rounded-[40px] border-none shadow-sm bg-white/40">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-white/20 text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
@@ -718,8 +708,8 @@ const Tasks: React.FC = () => {
                       </button>
                     )}
                   </td>
-                  <td className="px-8 py-6">
-                    <div className="relative">
+                  <td className="px-8 py-6 text-right">
+                    <div className="relative inline-block text-left">
                       <button 
                         onClick={(e) => { 
                           e.stopPropagation(); 
@@ -727,10 +717,10 @@ const Tasks: React.FC = () => {
                         }}
                         className={`p-2 rounded-lg text-text-muted transition-all ${openMenuId === task.id ? 'bg-gray-100 text-primary' : 'hover:bg-gray-100'}`}
                       >
-                        <MoreVertical className="w-4 h-4" />
+                        <MoreVertical className="w-5 h-5" />
                       </button>
                       {openMenuId === task.id && (
-                        <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-[100] animate-in fade-in zoom-in duration-150">
+                        <div className="absolute right-full mr-2 top-0 w-48 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-gray-100 py-2 z-[100] animate-in slide-in-from-right-2 fade-in duration-200">
                           <button 
                             onClick={(e) => { 
                               e.stopPropagation(); 
@@ -738,8 +728,9 @@ const Tasks: React.FC = () => {
                               setShowEditModal(true); 
                               setOpenMenuId(null);
                             }}
-                            className="w-full text-left px-4 py-2 text-xs font-bold text-text-secondary hover:bg-primary/5 hover:text-primary transition-all"
+                            className="w-full text-left px-5 py-3 text-sm font-bold text-text-secondary hover:bg-primary/5 hover:text-primary transition-all flex items-center"
                           >
+                            <Layout className="w-4 h-4 mr-3" />
                             Edit Task
                           </button>
                           <button 
@@ -749,8 +740,9 @@ const Tasks: React.FC = () => {
                               setShowDeleteModal(true); 
                               setOpenMenuId(null);
                             }}
-                            className="w-full text-left px-4 py-2 text-xs font-bold text-danger hover:bg-danger/5 transition-all"
+                            className="w-full text-left px-5 py-3 text-sm font-bold text-danger hover:bg-danger/5 transition-all flex items-center"
                           >
+                            <Trash2 className="w-4 h-4 mr-3" />
                             Delete Task
                           </button>
                         </div>

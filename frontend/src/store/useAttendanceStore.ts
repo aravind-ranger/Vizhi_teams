@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { db } from '../firebase.ts';
-import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 
 export interface AttendanceRecord {
   id: string;
@@ -36,51 +36,52 @@ export const useAttendanceStore = create<AttendanceStore>((set) => ({
       return;
     }
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
-      // First, try to find an open session (no check-out) from any time
-      const openQ = query(
+      // Fetch the most recent 5 records for this user (avoids complex index requirements)
+      const q = query(
         collection(db, 'attendance'),
         where('user_id', '==', userId),
-        where('check_out', '==', null),
-        limit(1)
+        orderBy('created_at', 'desc'),
+        limit(5)
       );
 
-      const openSnap = await getDocs(openQ);
+      const snap = await getDocs(q);
       
-      if (!openSnap.empty) {
-        const doc = openSnap.docs[0];
-        const data = doc.data();
-        set({ 
-          attendance: { id: doc.id, ...data } as AttendanceRecord, 
-          isBlocked: data.early_exit || false,
-          isLoading: false 
+      if (!snap.empty) {
+        // Find if any record was created today
+        const records = snap.docs.map(d => ({ id: d.id, ...d.data() } as AttendanceRecord));
+        
+        // Priority 1: Today's record (even if completed)
+        const todayRecord = records.find(r => {
+          const createdAt = (r as any).created_at?.toDate ? (r as any).created_at.toDate() : new Date((r as any).created_at);
+          return createdAt.getTime() >= startOfToday;
         });
-        return;
+
+        if (todayRecord) {
+          set({ 
+            attendance: todayRecord, 
+            isBlocked: todayRecord.early_exit || false,
+            isLoading: false 
+          });
+          return;
+        }
+
+        // Priority 2: An open session from a previous day (handle it as active)
+        const openRecord = records.find(r => !r.check_out);
+        if (openRecord) {
+          set({ 
+            attendance: openRecord, 
+            isBlocked: openRecord.early_exit || false,
+            isLoading: false 
+          });
+          return;
+        }
       }
 
-      // If no open session, look for a completed session from today
-      const todayQ = query(
-        collection(db, 'attendance'),
-        where('user_id', '==', userId),
-        where('created_at', '>=', today),
-        limit(1)
-      );
-
-      const todaySnap = await getDocs(todayQ);
-      
-      if (!todaySnap.empty) {
-        const doc = todaySnap.docs[0];
-        const data = doc.data();
-        set({ 
-          attendance: { id: doc.id, ...data } as AttendanceRecord, 
-          isBlocked: data.early_exit || false,
-          isLoading: false 
-        });
-      } else {
-        set({ attendance: null, isBlocked: false, isLoading: false });
-      }
+      // If no records found or none from today/open
+      set({ attendance: null, isBlocked: false, isLoading: false });
     } catch (err) {
       console.error('Failed to fetch attendance', err);
       set({ isLoading: false });

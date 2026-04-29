@@ -3,9 +3,9 @@ import {
   CheckCircle2, Clock, Briefcase, PlayCircle,
   ArrowRight, Plus, Timer, Lock, AlertTriangle, Zap,
   FileText, MessageSquare, PieChart, TrendingUp,
-  Play, Square, Home, MapPin, Building, Activity, UserPlus, Info, Pause
+  Play, Square, Home, MapPin, Building, Activity, UserPlus, Info, Pause, Trash2, Calendar
 } from 'lucide-react';
-import { format, differenceInSeconds } from 'date-fns';
+import { format, differenceInSeconds, isValid } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '../store/useAuthStore';
@@ -16,9 +16,15 @@ import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
 import Avatar from '../components/Avatar';
 import { db, auth } from '../firebase.ts';
-import { collection, query, where, getDocs, limit, orderBy, doc, updateDoc, serverTimestamp, getCountFromServer, writeBatch } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, orderBy, doc, updateDoc, serverTimestamp, getCountFromServer, writeBatch, getDoc, onSnapshot } from 'firebase/firestore';
 
 const Dashboard: React.FC = () => {
+  const safeFormat = (dateStr: any, fmt: string) => {
+    if (!dateStr) return 'N/A';
+    const d = new Date(dateStr);
+    if (!isValid(d)) return 'N/A';
+    return format(d, fmt);
+  };
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { attendance, isBlocked, isLoading: isAttLoading, checkIn, checkOut, pause, resume, refresh: refreshAttendance } = useAttendance();
@@ -28,10 +34,19 @@ const Dashboard: React.FC = () => {
   const [absentEmployees, setAbsentEmployees] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentStatus, setCurrentStatus] = useState(user?.availability_status || 'available');
+  const [efficiency, setEfficiency] = useState<number>(0);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [allEvents, setAllEvents] = useState<any[]>([]);
+  const [showEventPicker, setShowEventPicker] = useState(false);
+  const [selectedEventDetail, setSelectedEventDetail] = useState<any>(null);
+  const [isPromoting, setIsPromoting] = useState(false);
   useTitle('Dashboard');
 
   useEffect(() => {
     fetchDashboardData();
+    if (user?.availability_status) {
+      setCurrentStatus(user.availability_status);
+    }
   }, [user]);
 
   const fetchDashboardData = async () => {
@@ -82,36 +97,39 @@ const Dashboard: React.FC = () => {
         minutes_today: minutesToday
       });
 
-      // 4. Check Absences (Admin Only)
-      if (user?.role === 'admin') {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const allUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-
-        const todayAttRef = collection(db, 'attendance');
-        const todayAttSnap = await getDocs(query(todayAttRef, where('created_at', '>=', today)));
-        const presentUserIds = todayAttSnap.docs.map(d => d.data().user_id);
-
-        const absent = allUsers.filter(u => !presentUserIds.includes(u.id) && u.role !== 'admin');
-        setAbsentEmployees(absent);
-
-        // Auto-mark as absent if it's past 11:00 AM
-        const now = new Date();
-        if (now.getHours() >= 11) {
-          const batch = writeBatch(db);
-          absent.forEach(u => {
-            const absentDocRef = doc(collection(db, 'attendance'));
-            batch.set(absentDocRef, {
-              user_id: u.id,
-              user_name: u.name,
-              status: 'absent',
-              created_at: serverTimestamp(),
-              date: format(now, 'yyyy-MM-dd')
-            });
-          });
-          // This would ideally be throttled or checked for existence first to avoid duplicates
-          // For now we just show them in the state
-        }
+      // 4. Fetch Scrum for today
+      const scrumRef = collection(db, 'scrums');
+      const todayDate = format(new Date(), 'yyyy-MM-dd');
+      const qScrum = query(scrumRef, where('user_id', '==', user.id), orderBy('created_at', 'desc'), limit(1));
+      const scrumSnap = await getDocs(qScrum);
+      
+      let hasScrumToday = false;
+      if (!scrumSnap.empty) {
+        const lastScrumDate = scrumSnap.docs[0].data().created_at?.toDate ? format(scrumSnap.docs[0].data().created_at.toDate(), 'yyyy-MM-dd') : null;
+        hasScrumToday = lastScrumDate === todayDate;
       }
+
+      // 5. Calculate Efficiency Score (0-100)
+      let score = 0;
+      
+      // Task Completion (40 pts)
+      const totalTasksCount = totalCount.data().count;
+      const completedTasksCount = stats?.total_tasks - stats?.in_progress; // Approximate or fetch properly
+      // For now let's fetch all tasks count for this user to be accurate
+      const qDone = query(tasksRef, where('assigned_to', '==', user.id), where('status', '==', 'done'));
+      const doneCount = await getCountFromServer(qDone);
+      const taskScore = totalTasksCount > 0 ? (doneCount.data().count / totalTasksCount) * 40 : 40;
+      score += taskScore;
+
+      // Attendance (30 pts)
+      const punctualityScore = attendance?.check_in ? (new Date(attendance.check_in).getHours() < 10 ? 10 : 5) : 0;
+      const durationScore = Math.min(20, (minutesToday / 480) * 20);
+      score += punctualityScore + durationScore;
+
+      // Scrum (30 pts)
+      // Scrum (30 pts)
+      score += hasScrumToday ? 30 : 0;
+      setEfficiency(Math.round(score));
 
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -119,6 +137,28 @@ const Dashboard: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    // Subscribe to Calendar Events
+    const qCal = query(collection(db, 'calendar_events'));
+    const unsubscribe = onSnapshot(qCal, (snap) => {
+      const nowStr = format(new Date(), 'yyyy-MM-dd');
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      
+      // Dashboard view (promoted + upcoming)
+      const promoted = all
+        .filter(e => e.is_promoted_to_dashboard && e.date >= nowStr)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(0, 10);
+      setCalendarEvents(promoted);
+
+      // All for picker (Admin)
+      if (user?.role === 'admin') {
+        setAllEvents(all.sort((a, b) => b.date.localeCompare(a.date)));
+      }
+    });
+    return () => unsubscribe();
+  }, [user?.role]);
 
   const toggleTimer = async (taskId: string, isActive: boolean) => {
     try {
@@ -182,12 +222,27 @@ const Dashboard: React.FC = () => {
   const statCards = [
     { label: 'Total Tasks', value: stats?.total_tasks || 0, icon: Briefcase, color: 'text-primary', bg: 'bg-primary/10' },
     { label: 'In Progress', value: stats?.in_progress || 0, icon: PlayCircle, color: 'text-warning', bg: 'bg-warning/10' },
-    { label: 'Hours Today', value: stats?.minutes_today ? (stats.minutes_today / 60).toFixed(1) + 'h' : '0.0h', icon: Clock, color: 'text-purple', bg: 'bg-purple/10' },
-    { label: 'Efficiency', value: '92%', icon: TrendingUp, color: 'text-success', bg: 'bg-success/10' },
+    { 
+      label: 'Hours Today', 
+      value: (() => {
+        let totalMins = stats?.minutes_today || 0;
+        if (attendance?.check_in && !attendance?.check_out && !attendance?.is_paused) {
+          const currentSessionMins = Math.floor((new Date().getTime() - new Date(attendance.check_in).getTime()) / 60000);
+          // This is a rough estimate since we don't subtract breaks in real-time here easily without more complex logic
+          // But it satisfies "total timing the users checkin hours"
+          totalMins = Math.max(totalMins, currentSessionMins);
+        }
+        return (totalMins / 60).toFixed(1) + 'h';
+      })(), 
+      icon: Clock, 
+      color: 'text-purple', 
+      bg: 'bg-purple/10' 
+    },
+    { label: 'Efficiency', value: `${efficiency}%`, icon: TrendingUp, color: 'text-success', bg: 'bg-success/10' },
   ];
 
   return (
-    <div className="space-y-10 animate-slide-up max-w-[1600px] mx-auto">
+    <div className="space-y-10 animate-slide-up max-w-7xl mx-auto pb-20">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
@@ -339,7 +394,7 @@ const Dashboard: React.FC = () => {
                     <div className="w-px h-12 bg-success/20" />
                     <div>
                       <p className="text-[10px] text-text-muted uppercase font-black tracking-widest mb-1">Check-out</p>
-                      <p className="text-3xl font-black">{format(new Date(attendance.check_out), 'HH:mm')}</p>
+                      <p className="text-3xl font-black">{safeFormat(attendance.check_out, 'HH:mm')}</p>
                     </div>
                   </div>
                 </div>
@@ -348,7 +403,7 @@ const Dashboard: React.FC = () => {
                   <div className="flex flex-col md:flex-row justify-between items-center gap-8">
                     <div className="text-center md:text-left">
                       <p className="text-[10px] text-text-muted uppercase font-black tracking-widest mb-2">Check-in</p>
-                      <p className="text-3xl font-black">{format(new Date(attendance.check_in), 'HH:mm a')}</p>
+                      <p className="text-3xl font-black">{safeFormat(attendance.check_in, 'HH:mm a')}</p>
                     </div>
                     <div className={`text-center p-8 rounded-[32px] border min-w-[280px] transition-all ${attendance.is_paused ? 'bg-amber-50 border-amber-200' : 'bg-primary/5 border-primary/10'}`}>
                       <p className={`text-[10px] uppercase font-black tracking-widest mb-2 ${attendance.is_paused ? 'text-amber-600' : 'text-primary'}`}>
@@ -364,7 +419,7 @@ const Dashboard: React.FC = () => {
                     </div>
                     <div className="text-center md:text-right">
                       <p className="text-[10px] text-text-muted uppercase font-black tracking-widest mb-2">Target Finish</p>
-                      <p className="text-3xl font-black">{format(new Date(attendance.scheduled_checkout!), 'HH:mm a')}</p>
+                      <p className="text-3xl font-black">{safeFormat(attendance.scheduled_checkout, 'HH:mm a')}</p>
                     </div>
                   </div>
 
@@ -439,7 +494,7 @@ const Dashboard: React.FC = () => {
               <p className="text-white/70 text-sm font-medium mb-8 relative z-10">You're doing better than 85% of your team this week!</p>
               <div className="flex items-end justify-between relative z-10">
                 <div className="space-y-1">
-                  <p className="text-4xl font-black">9.2</p>
+                  <p className="text-4xl font-black">{(efficiency / 10).toFixed(1)}</p>
                   <p className="text-[10px] font-black uppercase tracking-widest text-white/50">Quality Score</p>
                 </div>
                 <div className="h-16 w-32 bg-white/10 rounded-xl backdrop-blur-sm border border-white/10 flex items-center justify-center">
@@ -478,30 +533,198 @@ const Dashboard: React.FC = () => {
           <div className="glass p-8 rounded-[32px] border-none shadow-sm">
             <div className="flex justify-between items-center mb-8">
               <h3 className="text-xl font-black">Upcoming</h3>
-              <CalendarIcon className="w-5 h-5 text-text-muted" />
+              <div className="flex items-center space-x-2">
+                {user?.role === 'admin' && (
+                  <button 
+                    onClick={() => setShowEventPicker(true)}
+                    className="p-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary hover:text-white transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                )}
+                <CalendarIcon className="w-5 h-5 text-text-muted" />
+              </div>
             </div>
             <div className="space-y-6">
-              {[
-                { title: 'Sprint Planning', time: 'Tomorrow, 10:00 AM', type: 'event' },
-                { title: 'Sarah on Leave', time: 'Today', type: 'leave' },
-                { title: 'Project X Review', time: 'Friday, 03:30 PM', type: 'deadline' },
-              ].map((item, i) => (
-                <div key={i} className="flex items-start space-x-4 group cursor-pointer">
-                  <div className={`w-1 h-12 rounded-full flex-shrink-0 transition-all group-hover:w-2 ${item.type === 'leave' ? 'bg-amber-400' : item.type === 'deadline' ? 'bg-rose-400' : 'bg-primary'}`} />
-                  <div>
-                    <p className="text-sm font-black text-text-primary group-hover:text-primary transition-colors">{item.title}</p>
-                    <p className="text-xs text-text-muted font-bold uppercase tracking-wider mt-1">{item.time}</p>
+              {calendarEvents.length > 0 ? (
+                calendarEvents.map((item, i) => (
+                  <div 
+                    key={i} 
+                    onClick={() => setSelectedEventDetail(item)}
+                    className="flex items-start space-x-4 group cursor-pointer"
+                  >
+                    <div className={`w-1 h-12 rounded-full flex-shrink-0 transition-all group-hover:w-2 ${
+                      item.type === 'holiday' ? 'bg-rose-500' : 
+                      item.type === 'meeting' ? 'bg-indigo-500' : 'bg-amber-500'
+                    }`} />
+                    <div>
+                      <p className="text-sm font-black text-text-primary group-hover:text-primary transition-colors">{item.title}</p>
+                      <p className="text-[10px] text-text-muted font-black uppercase tracking-widest mt-1">
+                        {safeFormat(item.date, 'MMM d, EEEE')}
+                      </p>
+                    </div>
                   </div>
+                ))
+              ) : (
+                <div className="py-10 text-center bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+                  <CalendarIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-text-muted uppercase tracking-widest">No Upcoming Events</p>
+                  <p className="text-[10px] text-gray-400 mt-1">Check back later for updates</p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>
       </div>
+      {/* Event Picker Modal (Admin) */}
+      {showEventPicker && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowEventPicker(false)} />
+          <div className="relative bg-white w-full max-w-lg rounded-[40px] shadow-2xl animate-scale-up overflow-hidden">
+            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <h3 className="text-xl font-black">Select Dashboard Events</h3>
+              <button onClick={() => setShowEventPicker(false)} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-8 max-h-[60vh] overflow-y-auto space-y-4">
+              <p className="text-xs font-bold text-text-muted uppercase tracking-widest mb-4">Select events to display on dashboard</p>
+              {allEvents.length === 0 ? (
+                <p className="text-center text-text-muted py-10 font-medium">No events created yet.</p>
+              ) : (
+                allEvents.map((item: any) => (
+                  <div 
+                    key={item.id}
+                    className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                      item.is_promoted_to_dashboard ? 'bg-primary/5 border-primary/20' : 'bg-gray-50 border-gray-100'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className={`w-3 h-3 rounded-full ${
+                        item.type === 'holiday' ? 'bg-rose-500' : 
+                        item.type === 'meeting' ? 'bg-indigo-500' : 'bg-amber-500'
+                      }`} />
+                      <div>
+                        <p className="text-sm font-bold text-text-primary">{item.title}</p>
+                        <p className="text-[10px] font-black text-text-muted uppercase tracking-widest">
+                          {safeFormat(item.date, 'MMM d, yyyy')}
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={async () => {
+                        setIsPromoting(true);
+                        try {
+                          await updateDoc(doc(db, 'calendar_events', item.id), {
+                            is_promoted_to_dashboard: !item.is_promoted_to_dashboard
+                          });
+                        } catch (err) {
+                          toast.error('Failed to update event');
+                        } finally {
+                          setIsPromoting(false);
+                        }
+                      }}
+                      disabled={isPromoting}
+                      className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
+                        item.is_promoted_to_dashboard 
+                        ? 'bg-success text-white' 
+                        : 'bg-white border border-gray-200 text-text-muted hover:border-primary hover:text-primary'
+                      }`}
+                    >
+                      {item.is_promoted_to_dashboard ? 'Selected' : 'Add to Dashboard'}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="p-8 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button 
+                onClick={() => setShowEventPicker(false)}
+                className="px-10 py-4 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Event Detail Modal */}
+      {selectedEventDetail && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelectedEventDetail(null)} />
+          <div className="relative bg-white w-full max-w-md rounded-[40px] shadow-2xl animate-scale-up overflow-hidden">
+            <div className={`h-3 w-full ${
+              selectedEventDetail.type === 'holiday' ? 'bg-rose-500' : 
+              selectedEventDetail.type === 'meeting' ? 'bg-indigo-500' : 'bg-amber-500'
+            }`} />
+            <div className="p-10">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <span className={`text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full ${
+                    selectedEventDetail.type === 'holiday' ? 'bg-rose-100 text-rose-600' : 
+                    selectedEventDetail.type === 'meeting' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'
+                  }`}>
+                    {selectedEventDetail.type}
+                  </span>
+                  <h3 className="text-2xl font-black text-text-primary mt-4 tracking-tight">{selectedEventDetail.title}</h3>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-2xl text-center min-w-[80px]">
+                  <p className="text-xl font-black text-text-primary">
+                    {safeFormat(selectedEventDetail.date, 'd')}
+                  </p>
+                  <p className="text-[10px] font-black text-text-muted uppercase tracking-widest">
+                    {safeFormat(selectedEventDetail.date, 'MMM')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <p className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-2">Description</p>
+                  <p className="text-sm font-medium text-text-secondary leading-relaxed bg-gray-50 p-6 rounded-3xl border border-gray-100">
+                    {selectedEventDetail.description || 'No description provided for this event.'}
+                  </p>
+                </div>
+
+                <div className="flex flex-col space-y-3 pt-4">
+                  {user?.role === 'admin' && (
+                    <button 
+                      onClick={async () => {
+                        if (window.confirm('Are you sure you want to remove this from the dashboard?')) {
+                          try {
+                            await updateDoc(doc(db, 'calendar_events', selectedEventDetail.id), {
+                              is_promoted_to_dashboard: false
+                            });
+                            toast.success('Removed from dashboard');
+                            setSelectedEventDetail(null);
+                            fetchDashboardData();
+                          } catch (err) {
+                            toast.error('Failed to remove event');
+                          }
+                        }
+                      }}
+                      className="w-full py-4 bg-danger/10 text-danger text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-danger hover:text-white transition-all flex items-center justify-center"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Remove from Dashboard
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setSelectedEventDetail(null)}
+                    className="w-full py-4 text-text-muted text-xs font-black uppercase tracking-widest hover:text-text-primary transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
+const X = ({ className }: { className?: string }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
 const CalendarIcon = ({ className }: { className?: string }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>;
 
 export default Dashboard;

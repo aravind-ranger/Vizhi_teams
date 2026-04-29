@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { Bell, Menu, Search, User, Settings, LogOut, Clock as ClockIcon, Power, Zap, Home, MapPin, Building, AlertTriangle, Play, Pause } from 'lucide-react';
+import { Bell, Menu, Search, User, Settings, LogOut, Clock as ClockIcon, Power, Home, MapPin, Building, AlertTriangle, Play, Pause } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuthStore } from '../store/useAuthStore';
 import { useAttendance } from '../hooks/useAttendance';
 import { db } from '../firebase.ts';
-import { collection, query, where, orderBy, onSnapshot, writeBatch, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, writeBatch, doc, updateDoc, addDoc, serverTimestamp, getDocs, limit } from 'firebase/firestore';
 import Avatar from './Avatar';
 
 interface TopBarProps {
@@ -26,11 +26,63 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [isCheckoutConfirmed, setIsCheckoutConfirmed] = useState(false);
+  const [showOvertimeModal, setShowOvertimeModal] = useState(false);
+  const [overtimeHours, setOvertimeHours] = useState('1');
+  const [hasNotifiedShiftEnd, setHasNotifiedShiftEnd] = useState(false);
+  const [hasNotifiedScrum, setHasNotifiedScrum] = useState(false);
 
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
+    const timer = setInterval(() => {
+      const now = new Date();
+      setTime(now);
+
+      // Shift end notification (8 hours)
+      if (attendance?.check_in && !attendance.check_out && !hasNotifiedShiftEnd) {
+        const checkInTime = new Date(attendance.check_in);
+        const diffHours = (now.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+        if (diffHours >= 7.75 && diffHours < 8) { // 15 mins before
+           toast('Your shift is ending in 15 minutes!', { icon: '⏰' });
+           setHasNotifiedShiftEnd(true);
+        }
+        if (diffHours >= 8 && !hasNotifiedShiftEnd) {
+           toast.success('Shift completed! You can now log overtime if needed.');
+           setHasNotifiedShiftEnd(true);
+        }
+      }
+
+      // Scrum reminder
+      if (user && !hasNotifiedScrum) {
+         checkScrum();
+      }
+    }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [attendance, hasNotifiedShiftEnd, user, hasNotifiedScrum]);
+
+  const checkScrum = async () => {
+    if (!user) return;
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const q = query(
+        collection(db, 'scrums'),
+        where('user_id', '==', user.id),
+        orderBy('created_at', 'desc'),
+        limit(1)
+      );
+      const snap = await getDocs(q);
+      let alreadySubmitted = false;
+      if (!snap.empty) {
+        const lastScrumDate = format(snap.docs[0].data().created_at.toDate(), 'yyyy-MM-dd');
+        alreadySubmitted = lastScrumDate === today;
+      }
+      
+      if (!alreadySubmitted) {
+        toast('Don\'t forget to submit your Daily Scrum!', { icon: '📝', duration: 6000 });
+      }
+      setHasNotifiedScrum(true);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
     if (!user?.id) return;
@@ -166,6 +218,21 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
               </div>
             )}
 
+            {/* Overtime Button */}
+            {attendance?.check_in && !attendance?.check_out && (
+              <button 
+                onClick={() => setShowOvertimeModal(true)}
+                disabled={(() => {
+                  const checkInTime = new Date(attendance.check_in);
+                  const diffHours = (new Date().getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+                  return diffHours < 8;
+                })()}
+                className="flex items-center px-4 py-2 bg-amber-500 text-white text-xs font-bold rounded-lg shadow-sm hover:scale-105 active:scale-95 transition-all disabled:opacity-30 disabled:grayscale disabled:scale-100"
+              >
+                Overtime
+              </button>
+            )}
+
             {/* Pause/Resume Actions */}
             {attendance?.check_in && !attendance?.check_out && (
               <div className="flex items-center space-x-1 border-l border-gray-200 ml-2 pl-2">
@@ -188,14 +255,6 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
                 )}
               </div>
             )}
-            
-            <button 
-              onClick={onFocusMode}
-              className="flex items-center px-3 py-2 text-primary hover:bg-primary/10 rounded-lg transition-all"
-              title="Start Focus Session"
-            >
-              <Zap className="w-4 h-4 fill-current" />
-            </button>
             
             <div className="hidden md:flex items-center text-text-secondary font-medium px-3 border-l border-gray-200">
               <span className="text-sm font-mono">{format(time, 'HH:mm:ss')}</span>
@@ -314,9 +373,8 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
                         key={status.id}
                         onClick={async () => {
                           try {
-                            await updateDoc(doc(db, 'users', user?.id || ''), { availability: status.id });
+                            await updateDoc(doc(db, 'users', user?.id || ''), { availability_status: status.id });
                             
-                            // Broadcast notification
                             await addDoc(collection(db, 'notifications'), {
                               user_id: 'all',
                               title: 'Availability Update',
@@ -333,7 +391,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
                             console.error('Failed to update status', err);
                           }
                         }}
-                        className={`flex items-center px-3 py-2 rounded-lg text-xs font-bold transition-all hover:bg-gray-50 ${user?.availability === status.id ? 'bg-primary/5 text-primary' : 'text-text-secondary'}`}
+                        className={`flex items-center px-3 py-2 rounded-lg text-xs font-bold transition-all hover:bg-gray-50 ${user?.availability_status === status.id ? 'bg-primary/5 text-primary' : 'text-text-secondary'}`}
                       >
                         <div className={`w-2 h-2 rounded-full mr-3 ${status.color}`} />
                         {status.label}
@@ -444,6 +502,58 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
               >
                 No, Keep Working
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Overtime Modal */}
+      {showOvertimeModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-text-primary/40 backdrop-blur-sm" onClick={() => setShowOvertimeModal(false)} />
+          <div className="relative bg-white w-full max-w-sm p-10 rounded-[40px] shadow-2xl animate-scale-up text-center">
+            <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <ClockIcon className="w-10 h-10 text-amber-600" />
+            </div>
+            <h3 className="text-2xl font-black text-text-primary mb-3">Start Overtime?</h3>
+            <p className="text-text-muted mb-8 font-medium">How many hours of overtime are you planning to work?</p>
+            
+            <div className="space-y-4">
+              <input 
+                type="number" 
+                min="1" max="8"
+                value={overtimeHours}
+                onChange={(e) => setOvertimeHours(e.target.value)}
+                className="w-full h-14 text-center text-xl font-black bg-gray-50 rounded-2xl border-none focus:ring-4 focus:ring-amber-500/10 outline-none"
+              />
+              <div className="flex flex-col space-y-3">
+                <button
+                  onClick={async () => {
+                    try {
+                      await addDoc(collection(db, 'admin_logs'), {
+                        user_id: user?.id,
+                        user_name: user?.name,
+                        action: 'overtime_start',
+                        details: `${user?.name} started ${overtimeHours}h overtime`,
+                        hours: overtimeHours,
+                        created_at: serverTimestamp()
+                      });
+                      toast.success(`Overtime started for ${overtimeHours} hours!`);
+                      setShowOvertimeModal(false);
+                    } catch (err) {
+                      toast.error('Failed to log overtime');
+                    }
+                  }}
+                  className="w-full h-14 bg-amber-500 text-white font-black rounded-2xl shadow-xl shadow-amber-500/20 hover:scale-[1.02] active:scale-95 transition-all"
+                >
+                  Start Overtime
+                </button>
+                <button
+                  onClick={() => setShowOvertimeModal(false)}
+                  className="w-full h-14 text-text-muted font-black uppercase tracking-widest hover:text-text-primary transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
