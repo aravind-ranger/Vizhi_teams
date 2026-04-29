@@ -77,7 +77,7 @@ const KanbanTask: React.FC<KanbanTaskProps> = ({ task, isOverlay }) => {
       <h4 className="font-bold text-text-primary text-sm group-hover:text-primary transition-colors mb-1 line-clamp-2">
         {task.title}
       </h4>
-      <div className="text-[9px] font-black text-text-muted mb-2 tracking-wider">#{task.task_code || 'TASK'}</div>
+      {/* Task ID removed as per request */}
 
       {task.is_paused_by_break && (
         <div className="mb-3 py-1.5 px-3 bg-amber-50 text-amber-600 text-[9px] font-black rounded-lg text-center uppercase tracking-widest border border-amber-200 animate-pulse">

@@ -3,11 +3,11 @@ import {
   Plus, Search, Filter, Layout, List, MoreVertical, 
   CheckCircle2, Clock, AlertCircle, Calendar, User, X,
   Play, Square, Timer as TimerIcon, MessageSquare, 
-  ChevronRight, ArrowRight, Save, Link
+  ChevronRight, ArrowRight, Save, Link, Trash2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { db } from '../firebase.ts';
-import { collection, query, getDocs, addDoc, updateDoc, doc, serverTimestamp, orderBy, where, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, query, getDocs, addDoc, updateDoc, doc, serverTimestamp, orderBy, where, getDoc, onSnapshot, writeBatch, deleteDoc } from 'firebase/firestore';
 import { useTitle } from '../hooks/useTitle';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
@@ -35,6 +35,7 @@ interface Task {
   is_paused_by_break?: boolean;
   rejection_reason?: string;
   created_by?: string;
+  is_project_task?: boolean;
 }
 
 const LiveTimer: React.FC<{ start: string; baseMinutes: number }> = ({ start, baseMinutes }) => {
@@ -199,12 +200,6 @@ const Tasks: React.FC = () => {
       
       const isAutoApproved = user?.role === 'admin';
       
-      // Generate Custom Task ID
-      const userName = user?.name || 'SYS';
-      const prefix = userName.slice(0, 3).toUpperCase();
-      const randomNum = Math.floor(1000 + Math.random() * 9000);
-      const taskCode = `${prefix}-${randomNum}`;
-
       const newTask = {
         ...form,
         project_name: project?.name || 'Unknown Project',
@@ -213,7 +208,6 @@ const Tasks: React.FC = () => {
         total_minutes_logged: 0,
         active_session_id: null,
         is_approved: isAutoApproved,
-        task_code: taskCode,
         created_by: user?.id,
         created_at: serverTimestamp()
       };
@@ -223,8 +217,8 @@ const Tasks: React.FC = () => {
       // Broadcast notification
       await addDoc(collection(db, 'notifications'), {
         user_id: 'all',
-        title: 'New Task Created',
-        message: `${user?.name} created task ${taskCode}: ${form.title}`,
+        title: 'New Task Assignment',
+        message: `${user?.name} has assigned the ${project?.name || 'Project'} to ${assignee?.name || 'Unassigned'}`,
         type: 'task_created',
         is_read: false,
         created_at: serverTimestamp()
@@ -368,6 +362,22 @@ const Tasks: React.FC = () => {
     }
   };
 
+  const clearAllTasks = async () => {
+    if (!window.confirm('WARNING: This will permanently delete ALL tasks in the system. Are you sure?')) return;
+    
+    const loadingToast = toast.loading('Clearing all tasks...');
+    try {
+      const snap = await getDocs(collection(db, 'tasks'));
+      const batch = writeBatch(db);
+      snap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      toast.success('System reset: All tasks cleared.', { id: loadingToast });
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to clear tasks', { id: loadingToast });
+    }
+  };
+
   const formatMinutes = (mins: number) => {
     const h = Math.floor(mins / 60);
     const m = Math.round(mins % 60);
@@ -378,6 +388,9 @@ const Tasks: React.FC = () => {
     const matchesSearch = t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          t.project_name?.toLowerCase().includes(searchTerm.toLowerCase());
     
+    // Hide tasks created inside projects from the main Tasks page for everyone (they stay in the Project page)
+    if (t.is_project_task) return false;
+
     // Admin sees everything, employees only see their assigned tasks
     if (user?.role === 'admin') return matchesSearch;
     return matchesSearch && (t.assigned_to === user?.id || t.created_by === user?.id);
@@ -415,13 +428,20 @@ const Tasks: React.FC = () => {
           </div>
           {user?.role === 'admin' && (
             <button 
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center space-x-3 px-6 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
+              onClick={clearAllTasks}
+              className="flex items-center space-x-2 px-6 h-14 bg-rose-50 text-rose-600 rounded-2xl font-black hover:bg-rose-100 transition-all border border-rose-100 shadow-sm"
             >
-              <Plus className="w-5 h-5" />
-              <span>New Task</span>
+              <Trash2 className="w-4 h-4" />
+              <span>Clear All</span>
             </button>
           )}
+          <button 
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center space-x-3 px-6 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
+          >
+            <Plus className="w-5 h-5" />
+            <span>New Task</span>
+          </button>
         </div>
       </div>
 
@@ -472,12 +492,7 @@ const Tasks: React.FC = () => {
                         <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/5 px-2.5 py-1.5 rounded-xl w-fit">
                           {task.project_name}
                         </span>
-                        <div className="flex items-center space-x-1.5 text-[11px] font-black text-text-muted bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 group-hover:border-primary/20 transition-colors">
-                          <Link className="w-3 h-3 text-primary/60" />
-                          <span className="tracking-tighter">
-                            {task.task_code || `#${task.id.slice(0, 5)}`}
-                          </span>
-                        </div>
+                        {/* Task ID removed as per request */}
                       </div>
                       <PriorityBadge priority={task.priority} />
                     </div>

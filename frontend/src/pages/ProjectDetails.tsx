@@ -43,6 +43,8 @@ interface Task {
   assignee_id: string;
   due_date: string;
   task_code: string;
+  assigned_to: string;
+  is_project_task?: boolean;
   created_by?: string;
 }
 
@@ -65,6 +67,7 @@ const ProjectDetails: React.FC = () => {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Kanban');
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState<string | null>(null);
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -169,21 +172,16 @@ const ProjectDetails: React.FC = () => {
       const assignee = employees.find(e => e.id === form.assigned_to);
       const isAutoApproved = user?.role === 'admin' || user?.role === 'manager';
       
-      // Generate Custom Task ID
-      const userName = user?.name || 'SYS';
-      const prefix = userName.slice(0, 3).toUpperCase();
-      const randomNum = Math.floor(1000 + Math.random() * 9000);
-      const taskCode = `${prefix}-${randomNum}`;
-
       const newTask = {
         ...form,
         project_id: id,
         project_name: project?.name || 'Project',
+        assigned_to: form.assigned_to,
         assignee_id: form.assigned_to,
-        assignee_name: employees.find(e => e.id === form.assigned_to)?.name || 'Unassigned',
+        assignee_name: assignee?.name || 'Unassigned',
         status: isAutoApproved ? 'todo' : 'pending',
         is_approved: isAutoApproved,
-        task_code: taskCode,
+        is_project_task: true,
         created_by: user?.id,
         created_at: serverTimestamp()
       };
@@ -206,8 +204,8 @@ const ProjectDetails: React.FC = () => {
       // Broadcast notification
       await addDoc(collection(db, 'notifications'), {
         user_id: 'all',
-        title: 'New Task Created',
-        message: `${user?.name} created task ${taskCode}: ${form.title}`,
+        title: 'New Task Assignment',
+        message: `${user?.name} has assigned the ${project?.name || 'Project'} to ${assignee?.name || 'Unassigned'}`,
         type: 'task_created',
         is_read: false,
         created_at: serverTimestamp()
@@ -348,6 +346,51 @@ const ProjectDetails: React.FC = () => {
             </button>
           ))}
         </div>
+
+        {/* Assignee Filter */}
+        {activeTab === 'Kanban' && (
+          <div className="flex items-center space-x-4 py-4 px-1">
+            <div className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Filter:</div>
+            <div className="flex -space-x-2">
+              <button
+                onClick={() => setSelectedAssigneeId(null)}
+                className={`w-10 h-10 rounded-full border-2 flex items-center justify-center text-[10px] font-black transition-all z-20 ${
+                  selectedAssigneeId === null 
+                  ? 'border-primary bg-primary text-white scale-110 shadow-lg' 
+                  : 'border-white bg-gray-100 text-text-muted hover:bg-gray-200'
+                }`}
+              >
+                ALL
+              </button>
+              {project?.members.map((mId: string) => {
+                const emp = employees.find(e => e.id === mId);
+                const isSelected = selectedAssigneeId === mId;
+                return (
+                  <button
+                    key={mId}
+                    onClick={() => setSelectedAssigneeId(isSelected ? null : mId)}
+                    className={`relative transition-all ${isSelected ? 'z-30 scale-110' : 'z-10 hover:z-20 hover:scale-105'}`}
+                  >
+                    <Avatar 
+                      name={emp?.name || '?'} 
+                      url={emp?.avatar_url} 
+                      size="md" 
+                      className={`ring-2 ${isSelected ? 'ring-primary shadow-xl' : 'ring-white'}`}
+                    />
+                    {isSelected && (
+                      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-primary rounded-full" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedAssigneeId && (
+              <span className="text-xs font-black text-primary animate-fade-in">
+                Showing {employees.find(e => e.id === selectedAssigneeId)?.name}'s tasks
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Tab Content */}
@@ -361,25 +404,31 @@ const ProjectDetails: React.FC = () => {
             onDragEnd={onDragEnd}
           >
             <div className="flex space-x-6 min-h-[500px]">
-              {COLUMNS.map((col) => (
-                <KanbanColumn 
-                  key={col.id} 
-                  id={col.id} 
-                  title={col.title}
-                  count={tasks.filter(t => t.status === col.id).length}
-                >
-                  <SortableContext 
-                    items={tasks.filter(t => t.status === col.id).map(t => t.id)}
-                    strategy={verticalListSortingStrategy}
+              {COLUMNS.map((col) => {
+                const columnTasks = tasks.filter(t => {
+                  const statusMatch = t.status === col.id;
+                  const assigneeMatch = !selectedAssigneeId || t.assigned_to === selectedAssigneeId;
+                  return statusMatch && assigneeMatch;
+                });
+                
+                return (
+                  <KanbanColumn 
+                    key={col.id} 
+                    id={col.id} 
+                    title={col.title}
+                    count={columnTasks.length}
                   >
-                    {tasks
-                      .filter(t => t.status === col.id)
-                      .map((task) => (
+                    <SortableContext 
+                      items={columnTasks.map(t => t.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {columnTasks.map((task) => (
                         <KanbanTask key={task.id} task={task} />
                       ))}
-                  </SortableContext>
-                </KanbanColumn>
-              ))}
+                    </SortableContext>
+                  </KanbanColumn>
+                );
+              })}
             </div>
 
             <DragOverlay>
