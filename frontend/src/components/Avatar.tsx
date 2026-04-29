@@ -8,12 +8,13 @@ interface AvatarProps {
 }
 
 const Avatar: React.FC<AvatarProps> = ({ name, url, size = 'md', className = '' }) => {
+  const safeName = name || '?';
   const getInitials = (n: string) => {
-    return n.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
+    return n.split(' ').map(p => p?.[0] || '').join('').toUpperCase().slice(0, 2);
   };
 
   const getColor = (n: string) => {
-    const firstLetter = n[0].toUpperCase();
+    const firstLetter = (n || '?')[0].toUpperCase();
     if ('ABCD'.includes(firstLetter)) return 'bg-blue-500';
     if ('EFGH'.includes(firstLetter)) return 'bg-green-500';
     if ('IJKL'.includes(firstLetter)) return 'bg-amber-500';
@@ -41,8 +42,8 @@ const Avatar: React.FC<AvatarProps> = ({ name, url, size = 'md', className = '' 
   }
 
   return (
-    <div className={`${sizeClasses[size]} ${getColor(name)} rounded-full flex items-center justify-center text-white font-bold border border-white/20 ${className}`}>
-      {getInitials(name)}
+    <div className={`${sizeClasses[size]} ${getColor(safeName)} rounded-full flex items-center justify-center text-white font-bold border border-white/20 ${className}`}>
+      {getInitials(safeName)}
     </div>
   );
 };

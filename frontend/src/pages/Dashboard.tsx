@@ -3,7 +3,7 @@ import {
   CheckCircle2, Clock, Briefcase, PlayCircle,
   ArrowRight, Plus, Timer, Lock, AlertTriangle, Zap,
   FileText, MessageSquare, PieChart, TrendingUp,
-  Play, Square, Home, MapPin, Building, Activity, UserPlus, Info
+  Play, Square, Home, MapPin, Building, Activity, UserPlus, Info, Pause
 } from 'lucide-react';
 import { format, differenceInSeconds } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
@@ -14,13 +14,13 @@ import { useTitle } from '../hooks/useTitle';
 import ProgressBar from '../components/ProgressBar';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
-import { db, auth } from '../firebase';
+import { db, auth } from '../firebase.ts';
 import { collection, query, where, getDocs, limit, orderBy, doc, updateDoc, serverTimestamp, getCountFromServer, writeBatch } from 'firebase/firestore';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const { todayRecord: attendance, isBlocked, checkIn, checkOut, refresh: refreshAttendance } = useAttendance();
+  const { attendance, isBlocked, isLoading: isAttLoading, checkIn, checkOut, pause, resume, refresh: refreshAttendance } = useAttendance();
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [tasks, setTasks] = useState<any[]>([]);
@@ -57,15 +57,21 @@ const Dashboard: React.FC = () => {
         getCountFromServer(qInProgress)
       ]);
 
-      // 3. Fetch Minutes Today from Attendance
+      // 3. Fetch Minutes Today from Attendance (In-memory filtering to avoid index issues)
+      const attRef = collection(db, 'attendance');
+      const qAtt = query(attRef, where('user_id', '==', user.id));
+      const attSnap = await getDocs(qAtt);
+      
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const attRef = collection(db, 'attendance');
-      const qAtt = query(attRef, where('user_id', '==', user.id), where('created_at', '>=', today));
-      const attSnap = await getDocs(qAtt);
+      
       let minutesToday = 0;
       attSnap.forEach(doc => {
-        minutesToday += doc.data().duration_minutes || 0;
+        const data = doc.data();
+        const createdAt = data.created_at?.toDate ? data.created_at.toDate() : new Date(data.created_at);
+        if (createdAt >= today) {
+          minutesToday += data.duration_minutes || 0;
+        }
       });
 
       setStats({
@@ -102,18 +108,21 @@ const Dashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    if (attendance?.check_in && attendance?.scheduled_checkout && !attendance?.check_out && !attendance?.is_paused) {
-      const interval = setInterval(() => {
+    let interval: any;
+    if (attendance?.check_in && !attendance?.check_out && !attendance?.is_paused) {
+      interval = setInterval(() => {
+        const checkInTime = new Date(attendance.check_in!);
         const now = new Date();
-        const end = new Date(attendance.scheduled_checkout!);
-        const diff = differenceInSeconds(end, now);
+        const diff = 8 * 3600 - differenceInSeconds(now, checkInTime);
         setTimeLeft(diff);
       }, 1000);
       return () => clearInterval(interval);
-    } else if (attendance?.is_paused) {
-      // If paused, keep the current timeLeft or calculate it up to the pause point
-      // For simplicity, we just don't start the interval, effectively "freezing" the last value
-    } else {
+    } else if (attendance?.is_paused && attendance.pause_start) {
+      const checkInTime = new Date(attendance.check_in!);
+      const pauseTime = new Date(attendance.pause_start);
+      const diff = 8 * 3600 - differenceInSeconds(pauseTime, checkInTime);
+      setTimeLeft(diff);
+    } else if (!attendance?.check_in) {
       setTimeLeft(null);
     }
   }, [attendance]);
@@ -239,7 +248,12 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="relative z-10">
-              {!attendance?.check_in ? (
+              {isAttLoading ? (
+                <div className="bg-white/50 backdrop-blur-sm rounded-[32px] p-16 text-center border border-white/20">
+                  <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4" />
+                  <p className="text-sm font-bold text-text-muted uppercase tracking-widest">Restoring session...</p>
+                </div>
+              ) : !attendance?.check_in ? (
                 <div className="bg-white/50 backdrop-blur-sm rounded-[32px] p-16 text-center border border-white/20">
                   <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-8">
                     <Zap className="w-10 h-10 text-primary fill-current" />
@@ -275,11 +289,13 @@ const Dashboard: React.FC = () => {
                       <p className="text-[10px] text-text-muted uppercase font-black tracking-widest mb-2">Check-in</p>
                       <p className="text-3xl font-black">{format(new Date(attendance.check_in), 'HH:mm a')}</p>
                     </div>
-                    <div className="text-center bg-primary/5 p-8 rounded-[32px] border border-primary/10 min-w-[280px]">
-                      <p className="text-[10px] text-primary uppercase font-black tracking-widest mb-2">Time Remaining</p>
+                    <div className={`text-center p-8 rounded-[32px] border min-w-[280px] transition-all ${attendance.is_paused ? 'bg-amber-50 border-amber-200' : 'bg-primary/5 border-primary/10'}`}>
+                      <p className={`text-[10px] uppercase font-black tracking-widest mb-2 ${attendance.is_paused ? 'text-amber-600' : 'text-primary'}`}>
+                        {attendance.is_paused ? 'Break Time' : 'Time Remaining'}
+                      </p>
                       {timeLeft !== null && (
                         <div className="flex items-center justify-center space-x-3">
-                          <p className={`text-5xl font-black tracking-tighter tabular-nums ${timeLeft < 3600 ? 'text-danger' : 'text-text-primary'}`}>
+                          <p className={`text-5xl font-black tracking-tighter tabular-nums ${attendance.is_paused ? 'text-amber-500' : (timeLeft < 3600 ? 'text-danger' : 'text-text-primary')}`}>
                             {formatTimeLeft(timeLeft).text}
                           </p>
                         </div>
@@ -301,10 +317,11 @@ const Dashboard: React.FC = () => {
                       className="h-4 rounded-full"
                     />
                   </div>
-
-                  <div className="flex items-center justify-center space-x-3 text-success animate-pulse">
-                    <div className="w-2 h-2 rounded-full bg-success" />
-                    <p className="text-xs font-black uppercase tracking-[0.3em]">Work session in progress</p>
+                  <div className={`flex items-center space-x-3 ${attendance.is_paused ? 'text-amber-500' : 'text-success animate-pulse'}`}>
+                    <div className={`w-2 h-2 rounded-full ${attendance.is_paused ? 'bg-amber-500' : 'bg-success'}`} />
+                    <p className="text-xs font-black uppercase tracking-[0.3em]">
+                      {attendance.is_paused ? 'Break in progress' : 'Work session in progress'}
+                    </p>
                   </div>
                 </div>
               )}
@@ -334,8 +351,16 @@ const Dashboard: React.FC = () => {
                         </div>
                         <div className="flex items-center space-x-3">
                           <button
-                            onClick={(e) => { e.stopPropagation(); toggleTimer(task.id, !!task.active_session_id); }}
-                            className={`p-1.5 rounded-lg transition-all ${task.active_session_id ? 'bg-danger text-white' : 'bg-primary/10 text-primary opacity-0 group-hover:opacity-100'}`}
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              if (attendance?.is_paused) {
+                                toast.error('Please resume work before starting/stopping tasks');
+                                return;
+                              }
+                              toggleTimer(task.id, !!task.active_session_id); 
+                            }}
+                            disabled={attendance?.is_paused}
+                            className={`p-1.5 rounded-lg transition-all ${attendance?.is_paused ? 'opacity-50 grayscale cursor-not-allowed' : ''} ${task.active_session_id ? 'bg-danger text-white' : 'bg-primary/10 text-primary opacity-0 group-hover:opacity-100'}`}
                           >
                             {task.active_session_id ? <Square className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current" />}
                           </button>

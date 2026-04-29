@@ -10,13 +10,14 @@ interface Task {
   id: string;
   title: string;
   description: string;
-  status: 'todo' | 'in_progress' | 'review' | 'done';
+  status: 'todo' | 'in_progress' | 'review' | 'done' | 'active' | 'completed' | 'planned' | 'pending' | 'paused_by_break';
   priority: 'low' | 'medium' | 'high';
   assignee_name: string;
   due_date: string;
   is_approved?: boolean;
   is_paused_by_break?: boolean;
   active_session_id?: string | null;
+  task_code?: string;
 }
 
 interface KanbanTaskProps {
@@ -73,9 +74,10 @@ const KanbanTask: React.FC<KanbanTaskProps> = ({ task, isOverlay }) => {
         </span>
       </div>
 
-      <h4 className="font-bold text-text-primary text-sm group-hover:text-primary transition-colors mb-2 line-clamp-2">
+      <h4 className="font-bold text-text-primary text-sm group-hover:text-primary transition-colors mb-1 line-clamp-2">
         {task.title}
       </h4>
+      <div className="text-[9px] font-black text-text-muted mb-2 tracking-wider">#{task.task_code || 'TASK'}</div>
 
       {task.is_paused_by_break && (
         <div className="mb-3 py-1.5 px-3 bg-amber-50 text-amber-600 text-[9px] font-black rounded-lg text-center uppercase tracking-widest border border-amber-200 animate-pulse">

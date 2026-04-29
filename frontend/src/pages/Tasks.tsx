@@ -6,7 +6,7 @@ import {
   ChevronRight, ArrowRight, Save, Link
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { db } from '../firebase';
+import { db } from '../firebase.ts';
 import { collection, query, getDocs, addDoc, updateDoc, doc, serverTimestamp, orderBy, where, getDoc, onSnapshot } from 'firebase/firestore';
 import { useTitle } from '../hooks/useTitle';
 import StatusBadge from '../components/StatusBadge';
@@ -19,7 +19,7 @@ interface Task {
   id: string;
   title: string;
   description: string;
-  status: 'todo' | 'in_progress' | 'review' | 'done' | 'paused_by_break';
+  status: 'todo' | 'in_progress' | 'review' | 'done' | 'active' | 'completed' | 'planned' | 'pending' | 'paused_by_break';
   priority: 'low' | 'medium' | 'high';
   project_name: string;
   project_id: string;
@@ -33,10 +33,13 @@ interface Task {
   active_session_start?: string;
   is_approved: boolean;
   is_paused_by_break?: boolean;
+  rejection_reason?: string;
+  created_by?: string;
 }
 
 const LiveTimer: React.FC<{ start: string; baseMinutes: number }> = ({ start, baseMinutes }) => {
-  const { isPaused } = useAttendanceStore();
+  const { attendance } = useAttendanceStore();
+  const isPaused = attendance?.is_paused;
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -105,7 +108,7 @@ const Tasks: React.FC = () => {
         ...doc.data(),
         due_date: doc.data().due_date?.toDate?.()?.toISOString() || doc.data().due_date,
         active_session_start: doc.data().active_session_start?.toDate?.()?.toISOString() || doc.data().active_session_start,
-      })) as Task[];
+      })) as any;
       
       setTasks(tasksData);
       setIsLoading(false);
@@ -124,7 +127,8 @@ const Tasks: React.FC = () => {
   }, []);
 
   // Sync tasks with Attendance Breaks
-  const { isPaused, attendance } = useAttendanceStore();
+  const { attendance } = useAttendanceStore();
+  const isPaused = attendance?.is_paused;
 
   useEffect(() => {
     const syncBreakWithTasks = async () => {
@@ -193,20 +197,51 @@ const Tasks: React.FC = () => {
       const project = projects.find(p => p.id === form.project_id);
       const assignee = employees.find(emp => emp.id === form.assigned_to);
       
+      const isAutoApproved = user?.role === 'admin';
+      
+      // Generate Custom Task ID
+      const userName = user?.name || 'SYS';
+      const prefix = userName.slice(0, 3).toUpperCase();
+      const randomNum = Math.floor(1000 + Math.random() * 9000);
+      const taskCode = `${prefix}-${randomNum}`;
+
       const newTask = {
         ...form,
         project_name: project?.name || 'Unknown Project',
         assignee_name: assignee?.name || 'Unassigned',
-        status: 'todo',
+        status: isAutoApproved ? 'todo' : 'pending',
         total_minutes_logged: 0,
         active_session_id: null,
-        is_approved: user?.role === 'admin', // Only admin tasks are auto-approved
+        is_approved: isAutoApproved,
+        task_code: taskCode,
+        created_by: user?.id,
         created_at: serverTimestamp()
       };
 
       await addDoc(collection(db, 'tasks'), newTask);
+      
+      // Broadcast notification
+      await addDoc(collection(db, 'notifications'), {
+        user_id: 'all',
+        title: 'New Task Created',
+        message: `${user?.name} created task ${taskCode}: ${form.title}`,
+        type: 'task_created',
+        is_read: false,
+        created_at: serverTimestamp()
+      });
 
-      toast.success('Task allotted successfully!');
+      if (!isAutoApproved) {
+        await addDoc(collection(db, 'notifications'), {
+          user_id: 'admin',
+          title: 'New Task Approval',
+          message: `${user?.name} created task "${form.title}" — needs your approval`,
+          type: 'approval_request',
+          is_read: false,
+          created_at: serverTimestamp()
+        });
+      }
+
+      toast.success(isAutoApproved ? 'Task allotted!' : 'Task submitted for approval!');
       setShowCreateModal(false);
       setForm({ title: '', description: '', project_id: '', assigned_to: '', priority: 'medium', due_date: '', estimated_hours: 0 });
     } catch (err) {
@@ -217,11 +252,56 @@ const Tasks: React.FC = () => {
 
   const approveTask = async (taskId: string) => {
     try {
-      await updateDoc(doc(db, 'tasks', taskId), { is_approved: true });
+      const taskRef = doc(db, 'tasks', taskId);
+      const taskSnap = await getDoc(taskRef);
+      const taskData = taskSnap.data();
+
+      await updateDoc(taskRef, { 
+        is_approved: true,
+        status: 'todo'
+      });
+
+      await addDoc(collection(db, 'notifications'), {
+        user_id: taskData?.assigned_to,
+        title: 'Task Approved! ✅',
+        message: `Your task "${taskData?.title}" has been approved. You can now start working.`,
+        type: 'approval',
+        is_read: false,
+        created_at: serverTimestamp()
+      });
+
       toast.success('Task approved!');
     } catch (err) {
       console.error(err);
       toast.error('Failed to approve task');
+    }
+  };
+
+  const rejectTask = async (taskId: string, reason: string) => {
+    try {
+      const taskRef = doc(db, 'tasks', taskId);
+      const taskSnap = await getDoc(taskRef);
+      const taskData = taskSnap.data();
+
+      await updateDoc(taskRef, { 
+        is_approved: false,
+        status: 'pending',
+        rejection_reason: reason
+      });
+
+      await addDoc(collection(db, 'notifications'), {
+        user_id: taskData?.assigned_to,
+        title: 'Task Rejected ❌',
+        message: `Your task "${taskData?.title}" was rejected. Reason: ${reason}`,
+        type: 'rejection',
+        is_read: false,
+        created_at: serverTimestamp()
+      });
+
+      toast.error('Task rejected');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to reject task');
     }
   };
 
@@ -300,12 +380,13 @@ const Tasks: React.FC = () => {
     
     // Admin sees everything, employees only see their assigned tasks
     if (user?.role === 'admin') return matchesSearch;
-    return matchesSearch && t.assigned_to === user?.id;
+    return matchesSearch && (t.assigned_to === user?.id || t.created_by === user?.id);
   });
 
   const columns = [
+    { id: 'pending', title: 'Pending Approval', icon: AlertCircle, color: 'text-rose-500', zone: 'bg-rose-50/50' },
     { id: 'todo', title: 'To Do', icon: Clock, color: 'text-gray-400', zone: 'bg-gray-50' },
-    { id: 'in_progress', title: 'In Progress', icon: AlertCircle, color: 'text-warning', zone: 'bg-amber-50/30' },
+    { id: 'in_progress', title: 'In Progress', icon: Play, color: 'text-warning', zone: 'bg-amber-50/30' },
     { id: 'review', title: 'Review', icon: Search, color: 'text-primary', zone: 'bg-indigo-50/30' },
     { id: 'done', title: 'Done', icon: CheckCircle2, color: 'text-success', zone: 'bg-emerald-50/30' },
   ];
@@ -332,13 +413,15 @@ const Tasks: React.FC = () => {
               <List className="w-4 h-4" />
             </button>
           </div>
-          <button 
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center space-x-3 px-6 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
-          >
-            <Plus className="w-5 h-5" />
-            <span>New Task</span>
-          </button>
+          {user?.role === 'admin' && (
+            <button 
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center space-x-3 px-6 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              <span>New Task</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -410,17 +493,34 @@ const Tasks: React.FC = () => {
                     )}
 
                     {!task.is_approved && (
-                      <div className="mb-4">
+                      <div className="mb-4 space-y-2">
                         {user?.role === 'admin' ? (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); approveTask(task.id); }}
-                            className="w-full py-2 px-4 bg-success/10 text-success text-xs font-black rounded-xl hover:bg-success hover:text-white transition-all uppercase tracking-widest"
-                          >
-                            ✓ Approve Task
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); approveTask(task.id); }}
+                              className="flex-1 py-2 px-4 bg-success/10 text-success text-xs font-black rounded-xl hover:bg-success hover:text-white transition-all uppercase tracking-widest"
+                            >
+                              ✓ Approve
+                            </button>
+                            <button
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                const reason = prompt('Reason for rejection:');
+                                if (reason) rejectTask(task.id, reason);
+                              }}
+                              className="flex-1 py-2 px-4 bg-danger/10 text-danger text-xs font-black rounded-xl hover:bg-danger hover:text-white transition-all uppercase tracking-widest"
+                            >
+                              ✕ Reject
+                            </button>
+                          </div>
                         ) : (
                           <div className="py-2 px-4 bg-amber-50 text-amber-600 text-[10px] font-black rounded-xl text-center uppercase tracking-widest">
-                            ⏳ Awaiting Admin Approval
+                            {task.rejection_reason ? '❌ Task Rejected' : '⏳ Awaiting Admin Approval'}
+                          </div>
+                        )}
+                        {task.rejection_reason && (
+                          <div className="p-3 bg-danger/5 text-danger text-[10px] font-bold rounded-xl border border-danger/10">
+                            Reason: {task.rejection_reason}
                           </div>
                         )}
                       </div>

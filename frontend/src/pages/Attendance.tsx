@@ -6,10 +6,13 @@ import {
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns';
 import { useAttendance } from '../hooks/useAttendance';
 import { useTitle } from '../hooks/useTitle';
-import api from '../services/api';
+import { db } from '../firebase';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { useAuthStore } from '../store/useAuthStore';
 import ProgressBar from '../components/ProgressBar';
 
 const Attendance: React.FC = () => {
+  const { user } = useAuthStore();
   const { attendance, checkIn, checkOut } = useAttendance();
   const [history, setHistory] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -17,12 +20,26 @@ const Attendance: React.FC = () => {
 
   useEffect(() => {
     fetchHistory();
-  }, []);
+  }, [user]);
 
   const fetchHistory = async () => {
+    if (!user?.id) return;
     try {
-      const response = await api.get('/attendance/history');
-      setHistory(response.data);
+      const q = query(
+        collection(db, 'attendance'),
+        where('user_id', '==', user.id),
+        orderBy('created_at', 'desc')
+      );
+      const snap = await getDocs(q);
+      const data = snap.docs.map(doc => {
+        const item = doc.data();
+        return {
+          id: doc.id,
+          date: item.created_at?.toDate ? item.created_at.toDate().toISOString() : item.check_in,
+          ...item
+        };
+      });
+      setHistory(data);
     } catch (err) {
       console.error(err);
     } finally {

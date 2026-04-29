@@ -4,7 +4,9 @@ import {
   Link, Share2, MoreHorizontal, UserCheck,
   ExternalLink, Building, ShieldCheck
 } from 'lucide-react';
-import api from '../services/api';
+import { db } from '../firebase.ts';
+import { collection, query, getDocs, orderBy } from 'firebase/firestore';
+import { toast } from 'react-hot-toast';
 import { useTitle } from '../hooks/useTitle';
 import Avatar from '../components/Avatar';
 import RoleBadge from '../components/RoleBadge';
@@ -20,6 +22,7 @@ interface Employee {
   created_at: string;
 }
 
+// ... (component start)
 const Employees: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,10 +35,16 @@ const Employees: React.FC = () => {
 
   const fetchEmployees = async () => {
     try {
-      const response = await api.get('/employees');
-      setEmployees(response.data);
+      const q = query(collection(db, 'users'), orderBy('name', 'asc'));
+      const snap = await getDocs(q);
+      const employeeData = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Employee[];
+      setEmployees(employeeData);
     } catch (err) {
       console.error(err);
+      toast.error('Failed to load team members');
     } finally {
       setIsLoading(false);
     }

@@ -22,6 +22,7 @@ const Tasks = React.lazy(() => import('./pages/Tasks'));
 const FocusMode = React.lazy(() => import('./components/FocusMode'));
 const Leaves = React.lazy(() => import('./pages/Leaves'));
 const Sprints = React.lazy(() => import('./pages/Sprints'));
+const AdminLogs = React.lazy(() => import('./pages/AdminLogs.tsx'));
 
 const ProtectedRoute = ({ children, roles }: { children: React.ReactNode, roles?: string[] }) => {
   const { token, user } = useAuthStore();
@@ -177,6 +178,11 @@ function App() {
         <Route path="/reports" element={
           <ProtectedRoute>
             <Reports />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin-logs" element={
+          <ProtectedRoute roles={['admin']}>
+            <AdminLogs />
           </ProtectedRoute>
         } />
 

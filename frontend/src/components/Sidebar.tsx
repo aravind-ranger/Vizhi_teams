@@ -47,6 +47,7 @@ const Sidebar: React.FC = () => {
       title: 'TOOLS',
       items: [
         { label: 'Reports', icon: PieChart, path: '/reports', roles: ['admin', 'manager', 'employee'] },
+        { label: 'Admin Logs', icon: FileText, path: '/admin-logs', roles: ['admin'] },
       ]
     }
   ];

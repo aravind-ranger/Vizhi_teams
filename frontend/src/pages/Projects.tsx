@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'; import {
   Plus, Search, Filter, MoreVertical,
   Calendar, Users, CheckCircle2, Clock, Briefcase, Lock, Check
 } from 'lucide-react';
-import { db } from '../firebase';
+import { db } from '../firebase.ts';
 import { collection, query, getDocs, orderBy, where } from 'firebase/firestore';
 import ProgressBar from '../components/ProgressBar';
 import { useTitle } from '../hooks/useTitle';
@@ -22,6 +22,7 @@ interface Project {
   start_date: string;
   end_date: string;
   members: string[];
+  created_at?: any;
 }
 
 const Projects: React.FC = () => {
@@ -55,18 +56,10 @@ const Projects: React.FC = () => {
   const fetchProjects = async () => {
     setIsLoading(true);
     try {
-      let q = query(collection(db, 'projects'), orderBy('created_at', 'desc'));
-
-      if (user?.role !== 'admin' && user?.id) {
-        q = query(
-          collection(db, 'projects'),
-          where('members', 'array-contains', user.id),
-          orderBy('created_at', 'desc')
-        );
-      }
+      let q = query(collection(db, 'projects'));
 
       const querySnapshot = await getDocs(q);
-      const projectsData = querySnapshot.docs.map(doc => ({
+      let projectsData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         status: doc.data().status || 'active',
@@ -74,6 +67,18 @@ const Projects: React.FC = () => {
         completed_tasks: doc.data().completed_tasks || 0,
         members: doc.data().members || [],
       })) as Project[];
+
+      // Sort by created_at desc in memory
+      projectsData.sort((a, b) => {
+        const dateA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || 0);
+        const dateB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at || 0);
+        return dateB.getTime() - dateA.getTime();
+      });
+
+      // In-memory filter for non-admins to ensure visibility without complex index requirements
+      if (user?.role !== 'admin' && user?.id) {
+        projectsData = projectsData.filter(p => p.members?.includes(user.id));
+      }
 
       setProjects(projectsData);
     } catch (err) {

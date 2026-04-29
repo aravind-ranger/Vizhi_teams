@@ -10,6 +10,7 @@ export interface User {
   is_active: boolean;
   is_verified: boolean;
   availability_status?: string;
+  availability?: string;
 }
 
 export interface AuthState {

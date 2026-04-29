@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, Plus, MoreHorizontal, Calendar, 
-  List, Layout, Settings, Users 
+  List, Layout, Settings, Users, X
 } from 'lucide-react';
 import { 
   DndContext, 
@@ -22,12 +22,14 @@ import {
   sortableKeyboardCoordinates, 
   verticalListSortingStrategy 
 } from '@dnd-kit/sortable';
-import { db } from '../firebase';
-import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { db } from '../firebase.ts';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, addDoc, serverTimestamp, onSnapshot, orderBy } from 'firebase/firestore';
 import KanbanColumn from '../components/KanbanColumn';
 import KanbanTask from '../components/KanbanTask';
+import Avatar from '../components/Avatar';
 
 import { useAuthStore } from '../store/useAuthStore';
+import { useAttendanceStore } from '../store/useAttendanceStore';
 import { toast } from 'react-hot-toast';
 
 interface Task {
@@ -35,14 +37,17 @@ interface Task {
   project_id: string;
   title: string;
   description: string;
-  status: 'todo' | 'in_progress' | 'review' | 'done';
+  status: 'todo' | 'in_progress' | 'review' | 'done' | 'active' | 'completed' | 'planned' | 'pending' | 'paused_by_break';
   priority: 'low' | 'medium' | 'high';
   assignee_name: string;
   assignee_id: string;
   due_date: string;
+  task_code: string;
+  created_by?: string;
 }
 
 const COLUMNS = [
+  { id: 'pending', title: 'Pending Approval' },
   { id: 'todo', title: 'To Do' },
   { id: 'in_progress', title: 'In Progress' },
   { id: 'review', title: 'Review' },
@@ -73,7 +78,8 @@ const ProjectDetails: React.FC = () => {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const { isPaused } = useAttendanceStore();
+  const { attendance } = useAttendanceStore();
+  const isPaused = attendance?.is_paused || false;
 
   useEffect(() => {
     fetchMetadata();
@@ -87,11 +93,7 @@ const ProjectDetails: React.FC = () => {
     });
 
     const tasksRef = collection(db, 'tasks');
-    let qTasks = query(tasksRef, where('project_id', '==', id));
-    
-    if (user?.role !== 'admin') {
-      qTasks = query(tasksRef, where('project_id', '==', id), where('assigned_to', '==', user?.id));
-    }
+    const qTasks = query(tasksRef, where('project_id', '==', id));
 
     const unsubscribe = onSnapshot(qTasks, (snapshot) => {
       setTasks(snapshot.docs.map(doc => ({ 
@@ -99,7 +101,7 @@ const ProjectDetails: React.FC = () => {
         ...doc.data(),
         due_date: doc.data().due_date?.toDate?.()?.toISOString() || doc.data().due_date,
         active_session_start: doc.data().active_session_start?.toDate?.()?.toISOString() || doc.data().active_session_start,
-      })) as Task[]);
+      })) as any);
     });
 
     return () => unsubscribe();
@@ -130,6 +132,7 @@ const ProjectDetails: React.FC = () => {
           active_session_id: null,
           active_session_start: null,
           is_paused_by_break: true,
+          status: 'paused_by_break',
           total_minutes_logged: ((activeTask as any).total_minutes_logged || 0) + durationMinutes
         });
         toast('Timer frozen for break', { icon: '❄️' });
@@ -139,7 +142,8 @@ const ProjectDetails: React.FC = () => {
         await updateDoc(taskRef, {
           active_session_id: 'active',
           active_session_start: serverTimestamp(),
-          is_paused_by_break: false
+          is_paused_by_break: false,
+          status: 'in_progress'
         });
         toast('Timer resumed!', { icon: '▶️' });
       }
@@ -162,27 +166,59 @@ const ProjectDetails: React.FC = () => {
       return;
     }
     try {
-      const { addDoc, serverTimestamp } = await import('firebase/firestore');
       const assignee = employees.find(e => e.id === form.assigned_to);
+      const isAutoApproved = user?.role === 'admin' || user?.role === 'manager';
       
-      await addDoc(collection(db, 'tasks'), {
+      // Generate Custom Task ID
+      const userName = user?.name || 'SYS';
+      const prefix = userName.slice(0, 3).toUpperCase();
+      const randomNum = Math.floor(1000 + Math.random() * 9000);
+      const taskCode = `${prefix}-${randomNum}`;
+
+      const newTask = {
         ...form,
         project_id: id,
         project_name: project?.name || 'Project',
-        assignee_name: assignee?.name || 'Unassigned',
-        status: 'todo',
-        total_minutes_logged: 0,
-        active_session_id: null,
-        is_approved: user?.role === 'admin',
+        assignee_id: form.assigned_to,
+        assignee_name: employees.find(e => e.id === form.assigned_to)?.name || 'Unassigned',
+        status: isAutoApproved ? 'todo' : 'pending',
+        is_approved: isAutoApproved,
+        task_code: taskCode,
+        created_by: user?.id,
+        created_at: serverTimestamp()
+      };
+
+      await addDoc(collection(db, 'tasks'), newTask);
+      
+      // Admin notification for approval (if employee created)
+      if (!isAutoApproved) {
+        await addDoc(collection(db, 'notifications'), {
+          user_id: 'admin',
+          title: 'Task Approval Required ⏳',
+          message: `${user?.name} created task "${form.title}". Please approve it.`,
+          type: 'approval_request',
+          link: `/tasks`,
+          is_read: false,
+          created_at: serverTimestamp()
+        });
+      }
+
+      // Broadcast notification
+      await addDoc(collection(db, 'notifications'), {
+        user_id: 'all',
+        title: 'New Task Created',
+        message: `${user?.name} created task ${taskCode}: ${form.title}`,
+        type: 'task_created',
+        is_read: false,
         created_at: serverTimestamp()
       });
-      
-      toast.success('Task created and assigned!');
+
+      toast.success(isAutoApproved ? 'Task created!' : 'Task submitted for approval!');
       setShowCreateModal(false);
       setForm({ title: '', description: '', assigned_to: '', priority: 'medium', due_date: '' });
-      fetchProjectData();
     } catch (err) {
-      toast.error('Failed to create task');
+      console.error('Task creation error:', err);
+      toast.error('Failed to create task. Check your permissions.');
     }
   };
 
@@ -239,14 +275,26 @@ const ProjectDetails: React.FC = () => {
     if (!over) return;
 
     const taskId = active.id as string;
-    const newStatus = over.data.current?.task?.status || over.id;
+    const newStatus = (over.data.current?.task?.status || over.id) as string;
+    const task = tasks.find(t => t.id === taskId);
 
-    try {
-      const taskRef = doc(db, 'tasks', taskId);
-      await updateDoc(taskRef, { status: newStatus });
-    } catch (err) {
-      console.error('Failed to update task status in Firestore', err);
-      fetchProjectData(); // Rollback
+    if (task && task.status !== newStatus) {
+      try {
+        const taskRef = doc(db, 'tasks', taskId);
+        await updateDoc(taskRef, { status: newStatus });
+
+        // Broadcast notification
+        await addDoc(collection(db, 'notifications'), {
+          user_id: 'all',
+          title: 'Task Updated',
+          message: `${user?.name} moved task "${task.title}" to ${newStatus.replace('_', ' ')}`,
+          type: 'task_status_change',
+          is_read: false,
+          created_at: serverTimestamp()
+        });
+      } catch (err) {
+        console.error('Failed to update task status in Firestore', err);
+      }
     }
   };
 
@@ -266,13 +314,15 @@ const ProjectDetails: React.FC = () => {
           </div>
           <div className="flex items-center space-x-3">
             <button className="p-2 hover:bg-gray-100 rounded-lg text-text-secondary"><Settings className="w-5 h-5" /></button>
-            <button 
-              onClick={() => setShowCreateModal(true)}
-              className="btn-primary flex items-center"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Task
-            </button>
+            {user?.role === 'admin' && (
+              <button 
+                onClick={() => setShowCreateModal(true)}
+                className="btn-primary flex items-center"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Task
+              </button>
+            )}
           </div>
         </div>
 
@@ -300,41 +350,114 @@ const ProjectDetails: React.FC = () => {
         </div>
       </div>
 
-      {/* Board */}
+      {/* Tab Content */}
       <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={onDragStart}
-          onDragOver={onDragOver}
-          onDragEnd={onDragEnd}
-        >
-          <div className="flex space-x-6 min-h-[500px]">
-            {COLUMNS.map((col) => (
-              <KanbanColumn 
-                key={col.id} 
-                id={col.id} 
-                title={col.title}
-                count={tasks.filter(t => t.status === col.id).length}
-              >
-                <SortableContext 
-                  items={tasks.filter(t => t.status === col.id).map(t => t.id)}
-                  strategy={verticalListSortingStrategy}
+        {activeTab === 'Kanban' ? (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={onDragStart}
+            onDragOver={onDragOver}
+            onDragEnd={onDragEnd}
+          >
+            <div className="flex space-x-6 min-h-[500px]">
+              {COLUMNS.map((col) => (
+                <KanbanColumn 
+                  key={col.id} 
+                  id={col.id} 
+                  title={col.title}
+                  count={tasks.filter(t => t.status === col.id).length}
                 >
-                  {tasks
-                    .filter(t => t.status === col.id)
-                    .map((task) => (
-                      <KanbanTask key={task.id} task={task} />
-                    ))}
-                </SortableContext>
-              </KanbanColumn>
-            ))}
-          </div>
+                  <SortableContext 
+                    items={tasks.filter(t => t.status === col.id).map(t => t.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {tasks
+                      .filter(t => t.status === col.id)
+                      .map((task) => (
+                        <KanbanTask key={task.id} task={task} />
+                      ))}
+                  </SortableContext>
+                </KanbanColumn>
+              ))}
+            </div>
 
-          <DragOverlay>
-            {activeTask ? <KanbanTask task={activeTask} isOverlay /> : null}
-          </DragOverlay>
-        </DndContext>
+            <DragOverlay>
+              {activeTask ? <KanbanTask task={activeTask} isOverlay /> : null}
+            </DragOverlay>
+          </DndContext>
+        ) : activeTab === 'Members' ? (
+          <div className="glass p-10 rounded-[40px] border-none shadow-sm max-w-4xl">
+            <div className="flex justify-between items-center mb-10">
+              <div>
+                <h3 className="text-2xl font-black text-text-primary">Project Members</h3>
+                <p className="text-sm text-text-muted">Manage who has access to this project</p>
+              </div>
+              {user?.role === 'admin' && (
+                <div className="flex items-center space-x-4">
+                  <select 
+                    className="input h-11 px-4 bg-gray-50 border-none shadow-sm text-sm font-bold"
+                    onChange={async (e) => {
+                      const memberId = e.target.value;
+                      if (!memberId || project.members.includes(memberId)) return;
+                      try {
+                        const newMembers = [...project.members, memberId];
+                        await updateDoc(doc(db, 'projects', id!), { members: newMembers });
+                        setProject({ ...project, members: newMembers });
+                        toast.success('Member added!');
+                      } catch (err) {
+                        toast.error('Failed to add member');
+                      }
+                    }}
+                  >
+                    <option value="">Add member...</option>
+                    {employees.filter(emp => !project.members.includes(emp.id)).map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {project.members.map((mId: string) => {
+                const emp = employees.find(e => e.id === mId);
+                return (
+                  <div key={mId} className="flex items-center justify-between p-4 bg-white/50 rounded-2xl border border-white/20">
+                    <div className="flex items-center space-x-4">
+                      <Avatar name={emp?.name || 'User'} size="md" />
+                      <div>
+                        <p className="text-sm font-black text-text-primary">{emp?.name || 'Unknown'}</p>
+                        <p className="text-xs text-text-muted font-bold capitalize">{emp?.role || 'Employee'}</p>
+                      </div>
+                    </div>
+                    {user?.role === 'admin' && project.created_by !== mId && (
+                      <button 
+                        onClick={async () => {
+                          try {
+                            const newMembers = project.members.filter((id: string) => id !== mId);
+                            await updateDoc(doc(db, 'projects', id!), { members: newMembers });
+                            setProject({ ...project, members: newMembers });
+                            toast.success('Member removed');
+                          } catch (err) {
+                            toast.error('Failed to remove member');
+                          }
+                        }}
+                        className="p-2 text-danger hover:bg-danger/10 rounded-xl transition-all"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-20 text-text-muted italic font-medium">
+            {activeTab} view coming soon...
+          </div>
+        )}
       </div>
       {/* Create Task Modal */}
       {showCreateModal && (
