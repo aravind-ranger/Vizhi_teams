@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTitle } from '../hooks/useTitle';
 import Avatar from '../components/Avatar';
-import { db } from '../firebase';
+import { db } from '../firebase.ts';
 import { collection, query, getDocs, addDoc, serverTimestamp, orderBy, where } from 'firebase/firestore';
 
 const DailyScrum: React.FC = () => {
@@ -24,11 +24,9 @@ const DailyScrum: React.FC = () => {
   }, [user]);
 
   const fetchHistory = async () => {
-    if (!user) return;
     try {
       const q = query(
         collection(db, 'scrums'),
-        where('user_id', '==', user.id),
         orderBy('created_at', 'desc')
       );
       const snap = await getDocs(q);
@@ -36,7 +34,7 @@ const DailyScrum: React.FC = () => {
         id: doc.id,
         ...doc.data(),
         date: doc.data().created_at?.toDate()?.toISOString() || new Date().toISOString()
-      })));
+      } as any)));
     } catch (err) {
       console.error(err);
     } finally {
@@ -148,26 +146,42 @@ const DailyScrum: React.FC = () => {
           {history.map((item, i) => (
             <div key={i} className="relative pl-12">
               <div className="absolute left-0 top-1 w-10 h-10 bg-white border border-border rounded-full flex items-center justify-center z-10 shadow-sm">
-                <CalendarIcon className="w-5 h-5 text-text-muted" />
+                <Avatar name={item.user_name || 'User'} size="xs" />
               </div>
-              <div className="card p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <h4 className="font-bold text-text-primary">{format(new Date(item.date), 'MMMM d, yyyy')}</h4>
+              <div className="card p-6 hover:shadow-lg transition-all border-l-4 border-l-primary">
+                <div className="flex justify-between items-center mb-6">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-black text-text-primary">{item.user_name}</span>
+                    <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">{format(new Date(item.date), 'EEEE, MMM d, yyyy')}</span>
+                  </div>
+                  {item.blockers && (
+                    <div className="px-3 py-1 bg-rose-50 text-rose-600 text-[10px] font-black rounded-lg uppercase tracking-widest animate-pulse border border-rose-100">
+                      Blocker Detected
+                    </div>
+                  )}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div>
-                    <p className="text-[10px] font-bold text-text-muted uppercase mb-1">Yesterday</p>
-                    <p className="text-sm text-text-secondary leading-relaxed">{item.yesterday}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] flex items-center">
+                      <span className="w-1.5 h-1.5 rounded-full bg-gray-300 mr-2" />
+                      Yesterday
+                    </p>
+                    <p className="text-sm text-text-secondary leading-relaxed bg-gray-50/50 p-4 rounded-2xl border border-gray-100">{item.yesterday}</p>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-text-muted uppercase mb-1">Today</p>
-                    <p className="text-sm text-text-secondary leading-relaxed">{item.today}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-text-muted uppercase mb-1">Blockers</p>
-                    <p className="text-sm font-medium text-danger">{item.blockers}</p>
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] flex items-center">
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary mr-2" />
+                      Today
+                    </p>
+                    <p className="text-sm text-text-secondary leading-relaxed bg-primary/5 p-4 rounded-2xl border border-primary/10">{item.today}</p>
                   </div>
                 </div>
+                {item.blockers && (
+                  <div className="mt-6 p-4 bg-rose-50/30 rounded-2xl border border-rose-100">
+                    <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">Obstacles / Blockers</p>
+                    <p className="text-sm font-medium text-rose-700">{item.blockers}</p>
+                  </div>
+                )}
               </div>
             </div>
           ))}

@@ -6,7 +6,10 @@ import {
 import { toast } from 'react-hot-toast';
 import { format, differenceInDays } from 'date-fns';
 import { useAuthStore } from '../store/useAuthStore';
-import api from '../services/api';
+import { db } from '../firebase';
+import { 
+  collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp 
+} from 'firebase/firestore';
 import ProgressBar from '../components/ProgressBar';
 import { useTitle } from '../hooks/useTitle';
 import Avatar from '../components/Avatar';
@@ -20,7 +23,7 @@ interface LeaveRequest {
   to_date: string;
   reason: string;
   status: 'pending' | 'approved' | 'rejected';
-  created_at: string;
+  created_at: any;
 }
 
 const Leaves: React.FC = () => {
@@ -52,42 +55,62 @@ const Leaves: React.FC = () => {
     { type: 'Earned', used: 5, total: 15, color: 'bg-green-500' },
   ];
 
-  useEffect(() => {
-    fetchLeaves();
-  }, []);
-
-  const fetchLeaves = async () => {
-    setIsLoading(true);
+  const formatDate = (dateInput: any, formatStr: string) => {
+    if (!dateInput) return 'N/A';
     try {
-      const response = await api.get('/leaves');
-      setLeaves(response.data);
+      const date = dateInput.toDate ? dateInput.toDate() : new Date(dateInput);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return format(date, formatStr);
     } catch (err) {
-      toast.error('Failed to load leaves');
-    } finally {
-      setIsLoading(false);
+      return 'Error Date';
     }
   };
+
+  useEffect(() => {
+    const q = query(collection(db, 'leaves'), orderBy('created_at', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const leavesData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as LeaveRequest[];
+      setLeaves(leavesData);
+      setIsLoading(false);
+    }, (err) => {
+      console.error('Leaves listener error:', err);
+      toast.error('Failed to load leaves');
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/leaves', form);
+      await addDoc(collection(db, 'leaves'), {
+        ...form,
+        user_id: user?.id,
+        employee_name: user?.name,
+        status: 'pending',
+        created_at: serverTimestamp()
+      });
       toast.success('Leave application submitted!');
       setShowApplyModal(false);
       setForm({ leave_type: 'Sick', from_date: '', to_date: '', reason: '' });
       localStorage.removeItem('leave_form_backup');
-      fetchLeaves();
     } catch (err) {
+      console.error('Submit leave error:', err);
       toast.error('Failed to submit application');
     }
   };
 
   const updateStatus = async (id: string, status: 'approved' | 'rejected') => {
     try {
-      await api.patch(`/leaves/${id}/status`, { status });
+      const leaveRef = doc(db, 'leaves', id);
+      await updateDoc(leaveRef, { status });
       toast.success(`Leave request ${status}`);
-      fetchLeaves();
     } catch (err) {
+      console.error('Update status error:', err);
       toast.error('Failed to update status');
     }
   };
@@ -190,7 +213,7 @@ const Leaves: React.FC = () => {
                   )}
                   <td className="px-6 py-4 font-bold text-sm">{leave.leave_type}</td>
                   <td className="px-6 py-4 text-sm text-text-secondary">
-                    {format(new Date(leave.from_date), 'MMM d')} - {format(new Date(leave.to_date), 'MMM d, yyyy')}
+                    {formatDate(leave.from_date, 'MMM d')} - {formatDate(leave.to_date, 'MMM d, yyyy')}
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${statusColors[leave.status]}`}>

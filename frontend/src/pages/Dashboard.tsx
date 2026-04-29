@@ -14,6 +14,7 @@ import { useTitle } from '../hooks/useTitle';
 import ProgressBar from '../components/ProgressBar';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
+import Avatar from '../components/Avatar';
 import { db, auth } from '../firebase.ts';
 import { collection, query, where, getDocs, limit, orderBy, doc, updateDoc, serverTimestamp, getCountFromServer, writeBatch } from 'firebase/firestore';
 
@@ -24,6 +25,7 @@ const Dashboard: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [tasks, setTasks] = useState<any[]>([]);
+  const [absentEmployees, setAbsentEmployees] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentStatus, setCurrentStatus] = useState(user?.availability_status || 'available');
   useTitle('Dashboard');
@@ -45,13 +47,13 @@ const Dashboard: React.FC = () => {
         limit(3)
       );
       const tasksSnap = await getDocs(qTasks);
-      const tasksData = tasksSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const tasksData = tasksSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       setTasks(tasksData);
 
       // 2. Calculate Stats
       const qTotal = query(tasksRef, where('assigned_to', '==', user.id));
       const qInProgress = query(tasksRef, where('assigned_to', '==', user.id), where('status', '==', 'in_progress'));
-      
+
       const [totalCount, inProgressCount] = await Promise.all([
         getCountFromServer(qTotal),
         getCountFromServer(qInProgress)
@@ -61,10 +63,10 @@ const Dashboard: React.FC = () => {
       const attRef = collection(db, 'attendance');
       const qAtt = query(attRef, where('user_id', '==', user.id));
       const attSnap = await getDocs(qAtt);
-      
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
+
       let minutesToday = 0;
       attSnap.forEach(doc => {
         const data = doc.data();
@@ -79,6 +81,37 @@ const Dashboard: React.FC = () => {
         in_progress: inProgressCount.data().count,
         minutes_today: minutesToday
       });
+
+      // 4. Check Absences (Admin Only)
+      if (user?.role === 'admin') {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        const allUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+
+        const todayAttRef = collection(db, 'attendance');
+        const todayAttSnap = await getDocs(query(todayAttRef, where('created_at', '>=', today)));
+        const presentUserIds = todayAttSnap.docs.map(d => d.data().user_id);
+
+        const absent = allUsers.filter(u => !presentUserIds.includes(u.id) && u.role !== 'admin');
+        setAbsentEmployees(absent);
+
+        // Auto-mark as absent if it's past 11:00 AM
+        const now = new Date();
+        if (now.getHours() >= 11) {
+          const batch = writeBatch(db);
+          absent.forEach(u => {
+            const absentDocRef = doc(collection(db, 'attendance'));
+            batch.set(absentDocRef, {
+              user_id: u.id,
+              user_name: u.name,
+              status: 'absent',
+              created_at: serverTimestamp(),
+              date: format(now, 'yyyy-MM-dd')
+            });
+          });
+          // This would ideally be throttled or checked for existence first to avoid duplicates
+          // For now we just show them in the state
+        }
+      }
 
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -161,7 +194,7 @@ const Dashboard: React.FC = () => {
           <h2 className="text-4xl font-black text-text-primary tracking-tight">
             {getGreeting()}, <span className="text-primary">{user?.name.split(' ')[0]}</span> 👋
           </h2>
-          <p className="text-text-muted mt-2 font-medium">Ready for another productive day at Vizhi Teams?</p>
+          <p className="text-text-muted mt-2 font-medium">Ready for another productive day at Vizhi?</p>
         </div>
         <div className="flex items-center space-x-3">
           <div className="glass px-2 py-1.5 rounded-2xl flex items-center space-x-1 border-none shadow-sm">
@@ -226,6 +259,34 @@ const Dashboard: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* Admin Absence Tracker */}
+      {user?.role === 'admin' && absentEmployees.length > 0 && (
+        <div className="glass p-8 rounded-[40px] border-none shadow-sm bg-rose-50/50 border-rose-100/50">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-rose-100 rounded-xl">
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+              </div>
+              <h3 className="text-xl font-black text-rose-900">Absent Today</h3>
+            </div>
+            <span className="text-[10px] font-black bg-rose-100 text-rose-600 px-3 py-1.5 rounded-xl uppercase tracking-widest">
+              {absentEmployees.length} EMPLOYEES
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            {absentEmployees.map((emp) => (
+              <div key={emp.id} className="flex items-center space-x-3 bg-white p-3 rounded-2xl shadow-sm border border-rose-100/50">
+                <Avatar name={emp.name} size="xs" />
+                <div>
+                  <p className="text-xs font-bold text-text-primary">{emp.name}</p>
+                  <p className="text-[9px] font-black text-rose-500 uppercase tracking-tighter">No Check-in</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -351,13 +412,13 @@ const Dashboard: React.FC = () => {
                         </div>
                         <div className="flex items-center space-x-3">
                           <button
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
+                            onClick={(e) => {
+                              e.stopPropagation();
                               if (attendance?.is_paused) {
                                 toast.error('Please resume work before starting/stopping tasks');
                                 return;
                               }
-                              toggleTimer(task.id, !!task.active_session_id); 
+                              toggleTimer(task.id, !!task.active_session_id);
                             }}
                             disabled={attendance?.is_paused}
                             className={`p-1.5 rounded-lg transition-all ${attendance?.is_paused ? 'opacity-50 grayscale cursor-not-allowed' : ''} ${task.active_session_id ? 'bg-danger text-white' : 'bg-primary/10 text-primary opacity-0 group-hover:opacity-100'}`}

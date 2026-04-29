@@ -172,6 +172,12 @@ const ProjectDetails: React.FC = () => {
       const assignee = employees.find(e => e.id === form.assigned_to);
       const isAutoApproved = user?.role === 'admin' || user?.role === 'manager';
       
+      // Generate Task ID: 3 letters of assignee + 3 random numbers
+      const targetName = assignee?.name || user?.name || 'SYS';
+      const prefix = targetName.slice(0, 3).toUpperCase();
+      const randomNum = Math.floor(100 + Math.random() * 900);
+      const taskCode = `${prefix}${randomNum}`;
+
       const newTask = {
         ...form,
         project_id: id,
@@ -181,6 +187,7 @@ const ProjectDetails: React.FC = () => {
         assignee_name: assignee?.name || 'Unassigned',
         status: isAutoApproved ? 'todo' : 'pending',
         is_approved: isAutoApproved,
+        task_code: taskCode,
         is_project_task: true,
         created_by: user?.id,
         created_at: serverTimestamp()

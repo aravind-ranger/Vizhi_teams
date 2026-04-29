@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
@@ -11,32 +11,138 @@ import {
 import { format, subDays } from 'date-fns';
 import { useTitle } from '../hooks/useTitle';
 
+import { db } from '../firebase';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { useAuthStore } from '../store/useAuthStore';
+
 const Reports: React.FC = () => {
+  const { user } = useAuthStore();
   const [dateRange, setDateRange] = useState('This Week');
+  const [isLoading, setIsLoading] = useState(true);
+  const [reportData, setReportData] = useState({
+    barData: [] as any[],
+    pieData: [] as any[],
+    stats: [] as any[],
+    logs: [] as any[]
+  });
   useTitle('Reports');
 
-  const barData = [
-    { name: 'Mon', hours: 8.5 },
-    { name: 'Tue', hours: 7.2 },
-    { name: 'Wed', hours: 9.0 },
-    { name: 'Thu', hours: 8.0 },
-    { name: 'Fri', hours: 6.5 },
-    { name: 'Sat', hours: 0 },
-    { name: 'Sun', hours: 0 },
-  ];
+  useEffect(() => {
+    fetchReportData();
+  }, [user, dateRange]);
 
-  const pieData = [
-    { name: 'Done', value: 45, color: '#2F9E44' },
-    { name: 'In Progress', value: 25, color: '#3B5BDB' },
-    { name: 'Review', value: 15, color: '#F08C00' },
-    { name: 'To Do', value: 15, color: '#ADB5BD' },
-  ];
+  const fetchReportData = async () => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      // 1. Fetch Attendance for Bar Chart (last 7 days)
+      const attQ = query(
+        collection(db, 'attendance'),
+        where('user_id', '==', user.id),
+        orderBy('created_at', 'desc')
+      );
+      const attSnap = await getDocs(attQ);
+      const attDocs = attSnap.docs.map(d => d.data() as any);
 
-  const stats = [
-    { label: 'Total Hours', value: '39.2', sub: '+12% vs last week', up: true },
-    { label: 'Avg Productivity', value: '88%', sub: '-2% vs last week', up: false },
-    { label: 'Tasks Completed', value: '18', sub: '+4 since Monday', up: true },
-  ];
+      // Process Bar Data (Last 7 Days)
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const last7Days = Array.from({length: 7}, (_, i) => {
+        const d = subDays(new Date(), i);
+        return { 
+          name: days[d.getDay()], 
+          fullDate: format(d, 'yyyy-MM-dd'),
+          hours: 0 
+        };
+      }).reverse();
+
+      attDocs.forEach(att => {
+        if (att.check_in) {
+          try {
+            const checkInDate = att.check_in.toDate ? att.check_in.toDate() : new Date(att.check_in);
+            if (!isNaN(checkInDate.getTime())) {
+              const dateStr = format(checkInDate, 'yyyy-MM-dd');
+              const day = last7Days.find(d => d.fullDate === dateStr);
+              if (day) {
+                day.hours += (att.duration_minutes || 0) / 60;
+              }
+            }
+          } catch (e) {
+            console.error('Error parsing date:', e);
+          }
+        }
+      });
+
+      // 2. Fetch Tasks for Pie Chart
+      const taskQ = query(
+        collection(db, 'tasks'),
+        where('assigned_to', '==', user.id)
+      );
+      const taskSnap = await getDocs(taskQ);
+      const tasks = taskSnap.docs.map(d => d.data() as any);
+
+      const statusCounts = {
+        todo: tasks.filter(t => t.status === 'todo').length,
+        in_progress: tasks.filter(t => t.status === 'in_progress').length,
+        done: tasks.filter(t => t.status === 'done').length,
+        pending: tasks.filter(t => t.status === 'pending').length
+      };
+
+      const pieData = [
+        { name: 'Done', value: statusCounts.done, color: '#2F9E44' },
+        { name: 'In Progress', value: statusCounts.in_progress, color: '#3B5BDB' },
+        { name: 'To Do', value: statusCounts.todo, color: '#ADB5BD' },
+        { name: 'Pending', value: statusCounts.pending, color: '#F08C00' },
+      ].filter(d => d.value > 0);
+
+      // 3. Fetch Scrum count
+      const scrumQ = query(
+        collection(db, 'scrums'),
+        where('user_id', '==', user.id)
+      );
+      const scrumSnap = await getDocs(scrumQ);
+      const scrumCount = scrumSnap.size;
+
+      // 4. Calculate Stats
+      const totalHours = last7Days.reduce((acc, d) => acc + d.hours, 0);
+      const tasksDone = statusCounts.done;
+      const productivity = totalHours > 0 ? Math.min(100, Math.round((tasksDone / (tasks.length || 1)) * 100)) : 0;
+
+      const stats = [
+        { label: 'Total Hours (Week)', value: totalHours.toFixed(1), sub: 'Active tracking', up: true },
+        { label: 'Avg Productivity', value: `${productivity}%`, sub: 'Based on tasks', up: productivity > 50 },
+        { label: 'Scrums Attended', value: scrumCount.toString(), sub: 'Daily participation', up: true },
+      ];
+
+      setReportData({
+        barData: last7Days,
+        pieData,
+        stats,
+        logs: tasks.slice(0, 10).map(t => {
+          let dateStr = 'Recently';
+          if (t.created_at) {
+            try {
+              const d = t.created_at.toDate ? t.created_at.toDate() : new Date(t.created_at);
+              if (!isNaN(d.getTime())) {
+                dateStr = format(d, 'MMM d, yyyy');
+              }
+            } catch (e) {}
+          }
+          return {
+            date: dateStr,
+            task: t.title,
+            project: t.project_name,
+            status: t.status,
+            hours: ((t.total_minutes_logged || 0) / 60).toFixed(1)
+          };
+        })
+      });
+
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -68,7 +174,7 @@ const Reports: React.FC = () => {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {stats.map((stat, i) => (
+        {reportData.stats.map((stat, i) => (
           <div key={i} className="card p-6">
             <p className="text-sm font-medium text-text-muted mb-2">{stat.label}</p>
             <div className="flex items-end justify-between">
@@ -88,7 +194,7 @@ const Reports: React.FC = () => {
           <h3 className="text-lg font-bold mb-8">Weekly Work Hours</h3>
           <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData}>
+              <BarChart data={reportData.barData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F3F5" />
                 <XAxis 
                   dataKey="name" 
@@ -119,31 +225,35 @@ const Reports: React.FC = () => {
         <div className="card p-8">
           <h3 className="text-lg font-bold mb-8">Task Status Distribution</h3>
           <div className="h-80 w-full flex items-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={80}
-                  outerRadius={110}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend 
-                  verticalAlign="middle" 
-                  align="right" 
-                  layout="vertical"
-                  iconType="circle"
-                  formatter={(value) => <span className="text-sm font-medium text-text-secondary ml-2">{value}</span>}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {reportData.pieData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={reportData.pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={80}
+                    outerRadius={110}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {reportData.pieData.map((entry: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend 
+                    verticalAlign="middle" 
+                    align="right" 
+                    layout="vertical"
+                    iconType="circle"
+                    formatter={(value) => <span className="text-sm font-medium text-text-secondary ml-2">{value}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="w-full text-center text-text-muted text-sm font-medium italic">No task data available for this period.</div>
+            )}
           </div>
         </div>
       </div>
@@ -151,26 +261,21 @@ const Reports: React.FC = () => {
       {/* Detailed Table */}
       <div className="card overflow-hidden">
         <div className="p-6 border-b border-border flex justify-between items-center">
-          <h3 className="text-lg font-bold">Activity Log</h3>
-          <button className="text-sm text-primary font-bold hover:underline">View All</button>
+          <h3 className="text-lg font-bold">Recent Task Activity</h3>
+          <button className="text-sm text-primary font-bold hover:underline">View All Tasks</button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-border text-[11px] font-bold text-text-muted uppercase tracking-wider">
-                <th className="px-6 py-4">Date</th>
+                <th className="px-6 py-4">Created Date</th>
                 <th className="px-6 py-4">Task / Project</th>
                 <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-right">Hours</th>
+                <th className="px-6 py-4 text-right">Time Logged</th>
               </tr>
             </thead>
             <tbody>
-              {[
-                { date: 'Apr 25, 2026', task: 'Setup DND for Kanban', project: 'Vizhi Teams', status: 'In Progress', hours: '4.5' },
-                { date: 'Apr 24, 2026', task: 'Auth Controller logic', project: 'Vizhi Teams', status: 'Done', hours: '6.0' },
-                { date: 'Apr 24, 2026', task: 'Team Meeting', project: 'Internal', status: 'Done', hours: '1.5' },
-                { date: 'Apr 23, 2026', task: 'Design System Polish', project: 'Design Ops', status: 'Done', hours: '8.0' },
-              ].map((row, i) => (
+              {reportData.logs.length > 0 ? reportData.logs.map((row, i) => (
                 <tr key={i} className="border-b border-border hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 text-sm text-text-secondary font-medium">{row.date}</td>
                   <td className="px-6 py-4">
@@ -184,7 +289,11 @@ const Reports: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 text-right text-sm font-bold text-text-primary">{row.hours}h</td>
                 </tr>
-              ))}
+              )) : (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center text-text-muted font-medium italic">No recent activity found.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

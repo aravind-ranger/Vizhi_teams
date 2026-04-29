@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { Bell, Menu, Search, User, Settings, LogOut, Clock as ClockIcon, Power, Zap, Home, MapPin, Building, AlertTriangle, Play, Pause } from 'lucide-react';
 import { format } from 'date-fns';
@@ -19,6 +19,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const { attendance, checkIn, checkOut, pause, resume, isBlocked, isLoading: isAttLoading } = useAttendance();
   
@@ -341,11 +342,17 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
                   </div>
                 </div>
                 <hr className="my-1 border-border" />
-                <button className="w-full flex items-center px-4 py-2.5 text-sm text-text-secondary hover:bg-gray-100 transition-colors">
+                <button 
+                  onClick={() => { navigate('/profile'); setShowUserMenu(false); }}
+                  className="w-full flex items-center px-4 py-2.5 text-sm text-text-secondary hover:bg-gray-100 transition-colors"
+                >
                   <User className="w-4 h-4 mr-3" />
                   Profile
                 </button>
-                <button className="w-full flex items-center px-4 py-2.5 text-sm text-text-secondary hover:bg-gray-100 transition-colors">
+                <button 
+                  onClick={() => { navigate('/profile'); setShowUserMenu(false); }}
+                  className="w-full flex items-center px-4 py-2.5 text-sm text-text-secondary hover:bg-gray-100 transition-colors"
+                >
                   <Settings className="w-4 h-4 mr-3" />
                   Change Password
                 </button>

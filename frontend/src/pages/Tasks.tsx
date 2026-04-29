@@ -73,7 +73,11 @@ const Tasks: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   useTitle('Tasks');
@@ -200,6 +204,12 @@ const Tasks: React.FC = () => {
       
       const isAutoApproved = user?.role === 'admin';
       
+      // Generate Task ID: 3 letters of assignee + 3 random numbers
+      const targetName = assignee?.name || user?.name || 'SYS';
+      const prefix = targetName.slice(0, 3).toUpperCase();
+      const randomNum = Math.floor(100 + Math.random() * 900);
+      const taskCode = `${prefix}${randomNum}`;
+
       const newTask = {
         ...form,
         project_name: project?.name || 'Unknown Project',
@@ -208,6 +218,7 @@ const Tasks: React.FC = () => {
         total_minutes_logged: 0,
         active_session_id: null,
         is_approved: isAutoApproved,
+        task_code: taskCode,
         created_by: user?.id,
         created_at: serverTimestamp()
       };
@@ -241,6 +252,50 @@ const Tasks: React.FC = () => {
     } catch (err) {
       console.error(err);
       toast.error('Failed to create task');
+    }
+  };
+
+  const handleUpdateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTask) return;
+    try {
+      const taskRef = doc(db, 'tasks', selectedTask.id);
+      await updateDoc(taskRef, {
+        title: selectedTask.title,
+        description: selectedTask.description,
+        priority: selectedTask.priority,
+        due_date: selectedTask.due_date,
+        estimated_hours: selectedTask.estimated_hours
+      });
+      toast.success('Task updated successfully!');
+      setShowEditModal(false);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update task');
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (!taskToDelete) return;
+    try {
+      await deleteDoc(doc(db, 'tasks', taskToDelete));
+      
+      // Log deletion for Admin
+      await addDoc(collection(db, 'notifications'), {
+        user_id: 'admin',
+        title: 'Task Deleted 🗑️',
+        message: `${user?.name} deleted a task.`,
+        type: 'system',
+        is_read: false,
+        created_at: serverTimestamp()
+      });
+
+      toast.success('Task deleted successfully!');
+      setShowDeleteModal(false);
+      setTaskToDelete(null);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete task');
     }
   };
 
@@ -362,22 +417,6 @@ const Tasks: React.FC = () => {
     }
   };
 
-  const clearAllTasks = async () => {
-    if (!window.confirm('WARNING: This will permanently delete ALL tasks in the system. Are you sure?')) return;
-    
-    const loadingToast = toast.loading('Clearing all tasks...');
-    try {
-      const snap = await getDocs(collection(db, 'tasks'));
-      const batch = writeBatch(db);
-      snap.docs.forEach(d => batch.delete(d.ref));
-      await batch.commit();
-      toast.success('System reset: All tasks cleared.', { id: loadingToast });
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to clear tasks', { id: loadingToast });
-    }
-  };
-
   const formatMinutes = (mins: number) => {
     const h = Math.floor(mins / 60);
     const m = Math.round(mins % 60);
@@ -426,15 +465,6 @@ const Tasks: React.FC = () => {
               <List className="w-4 h-4" />
             </button>
           </div>
-          {user?.role === 'admin' && (
-            <button 
-              onClick={clearAllTasks}
-              className="flex items-center space-x-2 px-6 h-14 bg-rose-50 text-rose-600 rounded-2xl font-black hover:bg-rose-100 transition-all border border-rose-100 shadow-sm"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Clear All</span>
-            </button>
-          )}
           <button 
             onClick={() => setShowCreateModal(true)}
             className="flex items-center space-x-3 px-6 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
@@ -492,9 +522,53 @@ const Tasks: React.FC = () => {
                         <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/5 px-2.5 py-1.5 rounded-xl w-fit">
                           {task.project_name}
                         </span>
-                        {/* Task ID removed as per request */}
+                        <div className="flex items-center space-x-1.5 text-[10px] font-black text-text-muted bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 group-hover:border-primary/20 transition-colors">
+                          <Link className="w-2.5 h-2.5 text-primary/60" />
+                          <span className="tracking-tighter">
+                            {task.task_code}
+                          </span>
+                        </div>
                       </div>
-                      <PriorityBadge priority={task.priority} />
+                      <div className="flex items-center space-x-2">
+                        <PriorityBadge priority={task.priority} />
+                        <div className="relative">
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              setOpenMenuId(openMenuId === task.id ? null : task.id);
+                            }}
+                            className={`p-1.5 rounded-lg text-text-muted transition-all ${openMenuId === task.id ? 'bg-gray-100 text-primary' : 'hover:bg-gray-100'}`}
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          {openMenuId === task.id && (
+                            <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-[100] animate-in fade-in zoom-in duration-150">
+                              <button 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  setSelectedTask(task); 
+                                  setShowEditModal(true); 
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full text-left px-4 py-2 text-xs font-bold text-text-secondary hover:bg-primary/5 hover:text-primary transition-all"
+                              >
+                                Edit Task
+                              </button>
+                              <button 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  setTaskToDelete(task.id); 
+                                  setShowDeleteModal(true); 
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full text-left px-4 py-2 text-xs font-bold text-danger hover:bg-danger/5 transition-all"
+                              >
+                                Delete Task
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <h4 className="font-bold text-base text-text-primary mb-3 group-hover:text-primary transition-colors line-clamp-2 leading-snug">
@@ -583,6 +657,7 @@ const Tasks: React.FC = () => {
                 <th className="px-8 py-6">Tracked / Estimated</th>
                 <th className="px-8 py-6">Team Lead</th>
                 <th className="px-8 py-6 text-center">Execution</th>
+                <th className="px-8 py-6"></th>
               </tr>
             </thead>
             <tbody>
@@ -642,6 +717,45 @@ const Tasks: React.FC = () => {
                         {task.active_session_id ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
                       </button>
                     )}
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="relative">
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setOpenMenuId(openMenuId === task.id ? null : task.id);
+                        }}
+                        className={`p-2 rounded-lg text-text-muted transition-all ${openMenuId === task.id ? 'bg-gray-100 text-primary' : 'hover:bg-gray-100'}`}
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                      {openMenuId === task.id && (
+                        <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-[100] animate-in fade-in zoom-in duration-150">
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              setSelectedTask(task); 
+                              setShowEditModal(true); 
+                              setOpenMenuId(null);
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs font-bold text-text-secondary hover:bg-primary/5 hover:text-primary transition-all"
+                          >
+                            Edit Task
+                          </button>
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              setTaskToDelete(task.id); 
+                              setShowDeleteModal(true); 
+                              setOpenMenuId(null);
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs font-bold text-danger hover:bg-danger/5 transition-all"
+                          >
+                            Delete Task
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -854,6 +968,57 @@ const Tasks: React.FC = () => {
                   <button type="submit" className="h-12 px-10 bg-primary text-white font-black rounded-xl shadow-lg shadow-primary/25 hover:scale-[1.02] active:scale-[0.98] transition-all">Launch Task</button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Task Modal */}
+      {showEditModal && selectedTask && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowEditModal(false)} />
+          <div className="relative bg-white w-full max-w-xl rounded-[40px] p-10 shadow-2xl animate-scale-up">
+            <h2 className="text-3xl font-black text-text-primary mb-8">Edit Task</h2>
+            <form onSubmit={handleUpdateTask} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Task Title</label>
+                <input 
+                  type="text" required
+                  className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all"
+                  value={selectedTask.title}
+                  onChange={(e) => setSelectedTask({...selectedTask, title: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Description</label>
+                <textarea 
+                  className="w-full h-32 px-6 py-4 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all resize-none"
+                  value={selectedTask.description}
+                  onChange={(e) => setSelectedTask({...selectedTask, description: e.target.value})}
+                />
+              </div>
+              <div className="flex gap-4 pt-4">
+                <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 h-14 rounded-2xl font-bold text-text-secondary hover:bg-gray-100 transition-all">Cancel</button>
+                <button type="submit" className="flex-1 h-14 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
+          <div className="relative bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl animate-scale-up text-center">
+            <div className="w-20 h-20 bg-danger/10 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Trash2 className="w-10 h-10 text-danger" />
+            </div>
+            <h2 className="text-2xl font-black text-text-primary mb-2">Are you sure?</h2>
+            <p className="text-text-muted font-medium mb-8 text-sm">This action cannot be undone. This task will be permanently deleted.</p>
+            <div className="flex flex-col gap-3">
+              <button onClick={handleDeleteTask} className="h-14 bg-danger text-white rounded-2xl font-black shadow-lg shadow-danger/20 hover:scale-[1.02] active:scale-95 transition-all">Yes, Delete Task</button>
+              <button onClick={() => setShowDeleteModal(false)} className="h-14 rounded-2xl font-bold text-text-secondary hover:bg-gray-100 transition-all">No, Keep it</button>
             </div>
           </div>
         </div>

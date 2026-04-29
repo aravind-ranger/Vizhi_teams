@@ -49,6 +49,15 @@ export const useAttendance = () => {
         created_at: now
       });
 
+      // Add to audit logs
+      await addDoc(collection(db, 'audit_logs'), {
+        user_id: user.id,
+        user_name: user.name,
+        action: 'checkin',
+        details: `${user.name} checked in from ${workLocation || 'office'}`,
+        created_at: now
+      });
+
       toast.success(`Checked in at ${now.toLocaleTimeString()}. Checkout at ${scheduledCheckout.toLocaleTimeString()} 🕐`);
     } catch (err: any) {
       console.error(err);
@@ -86,6 +95,16 @@ export const useAttendance = () => {
         message: `${user.name} checked out for the day`,
         type: 'status_change',
         is_read: false,
+        created_at: now
+      });
+
+      // Add to audit logs
+      await addDoc(collection(db, 'audit_logs'), {
+        user_id: user.id,
+        user_name: user.name,
+        action: 'checkout',
+        details: `${user.name} checked out. Worked for ${durationMinutes} minutes.`,
+        duration_minutes: durationMinutes,
         created_at: now
       });
 

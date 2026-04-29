@@ -12,17 +12,18 @@ import { doc, getDoc } from 'firebase/firestore';
 // Pages (to be created)
 const Login = React.lazy(() => import('./pages/Login'));
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
-const Projects = React.lazy(() => import('./pages/Projects'));
-const ProjectDetails = React.lazy(() => import('./pages/ProjectDetails'));
-const Employees = React.lazy(() => import('./pages/Employees'));
-const Attendance = React.lazy(() => import('./pages/Attendance'));
-const DailyScrum = React.lazy(() => import('./pages/DailyScrum'));
-const Reports = React.lazy(() => import('./pages/Reports'));
+const Projects = React.lazy(() => import('./pages/Projects.tsx'));
+const ProjectDetails = React.lazy(() => import('./pages/ProjectDetails.tsx'));
+const Employees = React.lazy(() => import('./pages/Employees.tsx'));
+const Attendance = React.lazy(() => import('./pages/Attendance.tsx'));
+const DailyScrum = React.lazy(() => import('./pages/DailyScrum.tsx'));
+const Reports = React.lazy(() => import('./pages/Reports.tsx'));
 const Tasks = React.lazy(() => import('./pages/Tasks'));
 const FocusMode = React.lazy(() => import('./components/FocusMode'));
 const Leaves = React.lazy(() => import('./pages/Leaves'));
 const Sprints = React.lazy(() => import('./pages/Sprints'));
 const AdminLogs = React.lazy(() => import('./pages/AdminLogs.tsx'));
+const Profile = React.lazy(() => import('./pages/Profile'));
 
 const ProtectedRoute = ({ children, roles }: { children: React.ReactNode, roles?: string[] }) => {
   const { token, user } = useAuthStore();
@@ -183,6 +184,11 @@ function App() {
         <Route path="/admin-logs" element={
           <ProtectedRoute roles={['admin']}>
             <AdminLogs />
+          </ProtectedRoute>
+        } />
+        <Route path="/profile" element={
+          <ProtectedRoute>
+            <Profile />
           </ProtectedRoute>
         } />
 
