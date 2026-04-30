@@ -46,13 +46,17 @@ const DailyScrum: React.FC = () => {
       
       const q = query(
         collection(db, 'scrums'),
-        where('user_id', '==', user.id),
-        where('created_at', '>=', startOfToday),
-        limit(1)
+        where('created_at', '>=', startOfToday)
       );
       const snap = await getDocs(q);
-      if (!snap.empty) {
-        const data = snap.docs[0].data();
+      
+      // Filter by user_id client-side to avoid complex index
+      const userScrum = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .find((d: any) => d.user_id === user.id);
+
+      if (userScrum) {
+        const data = userScrum as any;
         setSubmissionDate(format(data.created_at?.toDate() || new Date(), 'MMM d, yyyy h:mm a'));
         setIsSubmitted(true);
         // Sync localStorage
@@ -129,7 +133,7 @@ const DailyScrum: React.FC = () => {
       </div>
 
       {isChecking ? (
-        <div className="py-20 text-center bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+        <div className="py-20 text-center bg-gray-50/50 dark:bg-white/5 rounded-2xl border border-dashed border-gray-200 dark:border-white/10">
           <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4" />
           <p className="text-xs font-bold text-text-muted uppercase tracking-widest">Verifying status...</p>
         </div>
@@ -144,8 +148,8 @@ const DailyScrum: React.FC = () => {
         </div>
       ) : (
         <div className="card overflow-hidden">
-          <div className="p-8 border-b border-border bg-gray-50/30">
-            <h3 className="text-lg font-bold">Today's Status Update</h3>
+          <div className="p-8 border-b border-border bg-gray-50/30 dark:bg-white/5">
+            <h3 className="text-lg font-bold text-text-primary">Today's Status Update</h3>
           </div>
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
             <div className="space-y-3">
@@ -207,14 +211,14 @@ const DailyScrum: React.FC = () => {
                 type="date"
                 value={filterDate}
                 onChange={(e) => setFilterDate(e.target.value)}
-                className="bg-white border border-border px-4 py-2 rounded-xl text-xs font-bold focus:ring-4 focus:ring-primary/10 outline-none"
+                className="input px-4 py-2 rounded-xl text-xs font-bold focus:ring-4 focus:ring-primary/10 outline-none w-auto"
               />
             </div>
           </div>
-          <div className="space-y-6 relative before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100">
+          <div className="space-y-6 relative before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100 dark:before:bg-white/5">
             {history.map((item, i) => (
               <div key={i} className="relative pl-12">
-                <div className="absolute left-0 top-1 w-10 h-10 bg-white border border-border rounded-full flex items-center justify-center z-10 shadow-sm">
+                <div className="absolute left-0 top-1 w-10 h-10 bg-white dark:bg-glass border border-border rounded-full flex items-center justify-center z-10 shadow-sm">
                   <Avatar name={item.user_name || 'User'} size="xs" />
                 </div>
                 <div className="card p-6 hover:shadow-lg transition-all border-l-4 border-l-primary">
@@ -224,7 +228,7 @@ const DailyScrum: React.FC = () => {
                       <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">{format(new Date(item.date), 'EEEE, MMM d, yyyy')}</span>
                     </div>
                     {item.blockers && (
-                      <div className="px-3 py-1 bg-rose-50 text-rose-600 text-[10px] font-black rounded-lg uppercase tracking-widest animate-pulse border border-rose-100">
+                      <div className="px-3 py-1 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 text-[10px] font-black rounded-lg uppercase tracking-widest animate-pulse border border-rose-100 dark:border-rose-900/30">
                         Blocker Detected
                       </div>
                     )}
@@ -232,23 +236,23 @@ const DailyScrum: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-2">
                       <p className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] flex items-center">
-                        <span className="w-1.5 h-1.5 rounded-full bg-gray-300 mr-2" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-white/20 mr-2" />
                         Yesterday
                       </p>
-                      <p className="text-sm text-text-secondary leading-relaxed bg-gray-50/50 p-4 rounded-2xl border border-gray-100">{item.yesterday}</p>
+                      <p className="text-sm text-text-secondary leading-relaxed bg-gray-50/50 dark:bg-white/5 p-4 rounded-2xl border border-gray-100 dark:border-white/10">{item.yesterday}</p>
                     </div>
                     <div className="space-y-2">
                       <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] flex items-center">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary mr-2" />
                         Today
                       </p>
-                      <p className="text-sm text-text-secondary leading-relaxed bg-primary/5 p-4 rounded-2xl border border-primary/10">{item.today}</p>
+                      <p className="text-sm text-text-secondary leading-relaxed bg-primary/5 p-4 rounded-2xl border border-primary/10 dark:border-primary/20">{item.today}</p>
                     </div>
                   </div>
                   {item.blockers && (
-                    <div className="mt-6 p-4 bg-rose-50/30 rounded-2xl border border-rose-100">
+                    <div className="mt-6 p-4 bg-rose-50/30 dark:bg-rose-900/10 rounded-2xl border border-rose-100 dark:border-rose-900/20">
                       <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">Obstacles / Blockers</p>
-                      <p className="text-sm font-medium text-rose-700">{item.blockers}</p>
+                      <p className="text-sm font-medium text-rose-700 dark:text-rose-300">{item.blockers}</p>
                     </div>
                   )}
                 </div>

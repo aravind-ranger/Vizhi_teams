@@ -171,7 +171,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
     <>
       <header className="sticky top-0 h-[70px] glass z-20 flex items-center justify-between px-8 mx-6 my-2 rounded-2xl transition-all duration-300">
         <div className="flex items-center">
-          <button className="lg:hidden mr-4 p-2 hover:bg-gray-100 rounded-lg">
+          <button className="lg:hidden mr-4 p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg">
             <Menu className="w-5 h-5 text-text-secondary" />
           </button>
           <h1 className="text-xl font-bold text-text-primary">{getPageTitle()}</h1>
@@ -179,7 +179,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
 
         <div className="flex items-center space-x-6">
           {/* Attendance Widget */}
-          <div className="flex items-center space-x-3 bg-gray-100/50 p-1 rounded-xl">
+          <div className="flex items-center space-x-3 bg-gray-100/50 dark:bg-white/5 p-1 rounded-xl">
             {isAttLoading ? (
               <div className="flex items-center px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest animate-pulse">
                 Syncing...
@@ -256,7 +256,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
               </div>
             )}
             
-            <div className="hidden md:flex items-center text-text-secondary font-medium px-3 border-l border-gray-200">
+            <div className="hidden md:flex items-center text-text-secondary font-medium px-3 border-l border-gray-200 dark:border-white/10">
               <span className="text-sm font-mono">{format(time, 'HH:mm:ss')}</span>
             </div>
           </div>
@@ -265,18 +265,18 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
           <div className="relative">
             <button 
               onClick={() => setShowNotifications(!showNotifications)}
-              className="p-2 text-text-secondary hover:bg-gray-100 rounded-full relative"
+              className="p-2 text-text-secondary hover:bg-gray-100 dark:hover:bg-white/10 rounded-full relative"
             >
               <Bell className="w-5 h-5" />
               {notifications.some(n => !n.is_read) && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full border-2 border-white"></span>
+                <span className="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full border-2 border-white dark:border-[#0B1120]"></span>
               )}
             </button>
             
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-modal border border-border overflow-hidden">
-                <div className="p-4 border-b border-border flex justify-between items-center">
-                  <span className="font-bold">Notifications</span>
+              <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-glass rounded-xl shadow-modal border border-border dark:border-white/10 overflow-hidden">
+                <div className="p-4 border-b border-border dark:border-white/10 flex justify-between items-center bg-white dark:bg-transparent">
+                  <span className="font-bold text-text-primary">Notifications</span>
                   <button onClick={markAllRead} className="text-xs text-primary font-medium hover:underline">Mark all as read</button>
                 </div>
                 <div className="max-h-96 overflow-y-auto">
@@ -349,7 +349,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
           <div className="relative">
             <button 
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center space-x-2 p-1 pl-2 hover:bg-gray-100 rounded-full transition-colors"
+              className="flex items-center space-x-2 p-1 pl-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors"
             >
               <div className="hidden sm:block text-right">
                 <p className="text-xs font-bold text-text-primary leading-tight">{user?.name}</p>
@@ -359,7 +359,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
             </button>
 
             {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-modal border border-border py-1 overflow-hidden z-50">
+              <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-glass rounded-xl shadow-modal border border-border dark:border-white/10 py-1 overflow-hidden z-50">
                 <div className="px-4 py-2">
                   <p className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-2">My Availability</p>
                   <div className="grid grid-cols-1 gap-1">
@@ -417,7 +417,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
                 <hr className="my-1 border-border" />
                 <button 
                   onClick={logout}
-                  className="w-full flex items-center px-4 py-2.5 text-sm text-danger hover:bg-danger/5 transition-colors"
+                  className="w-full flex items-center px-4 py-2.5 text-sm text-danger hover:bg-danger/5 dark:hover:bg-danger/10 transition-colors"
                 >
                   <LogOut className="w-4 h-4 mr-3" />
                   Sign Out
@@ -431,8 +431,8 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
       {/* Check-in Location Modal */}
       {showCheckInModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-text-primary/40 backdrop-blur-sm" onClick={() => setShowCheckInModal(false)} />
-          <div className="relative bg-white w-full max-w-md p-10 rounded-[40px] shadow-2xl animate-scale-up">
+          <div className="absolute inset-0 bg-text-primary/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setShowCheckInModal(false)} />
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-md p-10 rounded-[40px] shadow-2xl animate-scale-up">
             <h3 className="text-2xl font-black text-text-primary mb-2 text-center">Check-in Location</h3>
             <p className="text-text-muted text-center mb-8 font-medium">Where are you working from today?</p>
             
@@ -474,8 +474,8 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
       {/* Checkout Confirmation Modal */}
       {showCheckoutModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-text-primary/40 backdrop-blur-sm" onClick={() => setShowCheckoutModal(false)} />
-          <div className="relative bg-white w-full max-w-sm p-10 rounded-[40px] shadow-2xl animate-scale-up text-center">
+          <div className="absolute inset-0 bg-text-primary/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setShowCheckoutModal(false)} />
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-sm p-10 rounded-[40px] shadow-2xl animate-scale-up text-center">
             <div className="w-20 h-20 bg-danger/10 rounded-full flex items-center justify-center mx-auto mb-6">
               <AlertTriangle className="w-10 h-10 text-danger" />
             </div>
@@ -509,9 +509,9 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
       {/* Overtime Modal */}
       {showOvertimeModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-text-primary/40 backdrop-blur-sm" onClick={() => setShowOvertimeModal(false)} />
-          <div className="relative bg-white w-full max-w-sm p-10 rounded-[40px] shadow-2xl animate-scale-up text-center">
-            <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className="absolute inset-0 bg-text-primary/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setShowOvertimeModal(false)} />
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-sm p-10 rounded-[40px] shadow-2xl animate-scale-up text-center">
+            <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
               <ClockIcon className="w-10 h-10 text-amber-600" />
             </div>
             <h3 className="text-2xl font-black text-text-primary mb-3">Start Overtime?</h3>

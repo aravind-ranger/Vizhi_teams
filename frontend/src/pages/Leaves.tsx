@@ -34,6 +34,9 @@ const Leaves: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'my' | 'all'>(user?.role === 'admin' ? 'all' : 'my');
   useTitle('Leaves');
 
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
+
   const [form, setForm] = useState(() => {
     const saved = localStorage.getItem('leave_form_backup');
     return saved ? JSON.parse(saved) : {
@@ -52,7 +55,6 @@ const Leaves: React.FC = () => {
   const balances = [
     { type: 'Sick', used: 2, total: 10, color: 'bg-red-500' },
     { type: 'Casual', used: 3, total: 12, color: 'bg-amber-500' },
-    { type: 'Earned', used: 5, total: 15, color: 'bg-green-500' },
   ];
 
   const formatDate = (dateInput: any, formatStr: string) => {
@@ -109,6 +111,7 @@ const Leaves: React.FC = () => {
       const leaveRef = doc(db, 'leaves', id);
       await updateDoc(leaveRef, { status });
       toast.success(`Leave request ${status}`);
+      setShowApprovalModal(false);
     } catch (err) {
       console.error('Update status error:', err);
       toast.error('Failed to update status');
@@ -143,16 +146,16 @@ const Leaves: React.FC = () => {
 
       {/* Role Tabs */}
       {(user?.role === 'admin' || user?.role === 'manager') && (
-        <div className="flex space-x-1 bg-gray-100 p-1 rounded-xl w-fit">
+        <div className="flex space-x-1 bg-gray-100 dark:bg-white/5 p-1 rounded-xl w-fit">
           <button 
             onClick={() => setActiveTab('my')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'my' ? 'bg-white shadow-sm text-primary' : 'text-text-muted hover:text-text-primary'}`}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'my' ? 'bg-white dark:bg-primary shadow-sm text-primary dark:text-white' : 'text-text-muted hover:text-text-primary'}`}
           >
             My Leaves
           </button>
           <button 
             onClick={() => setActiveTab('all')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'all' ? 'bg-white shadow-sm text-primary' : 'text-text-muted hover:text-text-primary'}`}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'all' ? 'bg-white dark:bg-primary shadow-sm text-primary dark:text-white' : 'text-text-muted hover:text-text-primary'}`}
           >
             Team Requests
           </button>
@@ -161,7 +164,7 @@ const Leaves: React.FC = () => {
 
       {/* Balance Cards (Only for 'my' tab) */}
       {activeTab === 'my' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {balances.map(b => (
             <div key={b.type} className="card glass p-6 border-none shadow-sm">
               <div className="flex justify-between items-center mb-4">
@@ -221,26 +224,15 @@ const Leaves: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    {activeTab === 'all' && leave.status === 'pending' ? (
-                      <div className="flex justify-end space-x-2">
-                        <button 
-                          onClick={() => updateStatus(leave.id, 'approved')}
-                          className="p-2 bg-success/10 text-success rounded-lg hover:bg-success hover:text-white transition-all"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => updateStatus(leave.id, 'rejected')}
-                          className="p-2 bg-danger/10 text-danger rounded-lg hover:bg-danger hover:text-white transition-all"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button className="text-text-muted hover:text-primary">
-                        <FileText className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button 
+                      onClick={() => {
+                        setSelectedLeave(leave);
+                        setShowApprovalModal(true);
+                      }}
+                      className="p-2 bg-gray-50 dark:bg-white/5 text-text-muted rounded-lg hover:bg-primary/10 hover:text-primary transition-all"
+                    >
+                      <FileText className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -249,28 +241,90 @@ const Leaves: React.FC = () => {
         </div>
       </div>
 
+      {/* Approval Modal */}
+      {showApprovalModal && selectedLeave && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowApprovalModal(false)} />
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 rounded-[32px] w-full max-w-md shadow-2xl animate-in fade-in zoom-in duration-200 overflow-hidden">
+            <div className="p-8 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
+              <h3 className="text-xl font-black text-text-primary">Review Request</h3>
+              <button onClick={() => setShowApprovalModal(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-white/10 rounded-full transition-colors"><X className="w-5 h-5 text-text-muted" /></button>
+            </div>
+            <div className="p-8 space-y-8">
+              <div className="flex items-center space-x-4">
+                <Avatar name={selectedLeave.employee_name || ''} size="lg" />
+                <div>
+                  <p className="text-lg font-black text-text-primary">{selectedLeave.employee_name}</p>
+                  <p className="text-xs font-bold text-text-muted uppercase tracking-widest">{selectedLeave.leave_type} Leave</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[10px] font-black text-text-muted uppercase tracking-widest">Reason for Leave</p>
+                <div className="p-4 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 italic text-sm text-text-secondary leading-relaxed">
+                  "{selectedLeave.reason}"
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10">
+                  <p className="text-[9px] font-black text-primary uppercase tracking-widest mb-1">From</p>
+                  <p className="text-sm font-bold">{formatDate(selectedLeave.from_date, 'MMM d, yyyy')}</p>
+                </div>
+                <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10">
+                  <p className="text-[9px] font-black text-primary uppercase tracking-widest mb-1">To</p>
+                  <p className="text-sm font-bold">{formatDate(selectedLeave.to_date, 'MMM d, yyyy')}</p>
+                </div>
+              </div>
+
+              {selectedLeave.status === 'pending' && user?.role === 'admin' ? (
+                <div className="flex space-x-3 pt-4">
+                  <button 
+                    onClick={() => updateStatus(selectedLeave.id, 'rejected')}
+                    className="flex-1 h-14 bg-danger/10 text-danger rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-danger hover:text-white transition-all shadow-lg shadow-danger/5"
+                  >
+                    Reject
+                  </button>
+                  <button 
+                    onClick={() => updateStatus(selectedLeave.id, 'approved')}
+                    className="flex-1 h-14 bg-success text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-success-dark transition-all shadow-lg shadow-success/20"
+                  >
+                    Approve
+                  </button>
+                </div>
+              ) : (
+                <div className={`p-4 rounded-2xl text-center font-black text-xs uppercase tracking-widest ${statusColors[selectedLeave.status]}`}>
+                  Status: {selectedLeave.status}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Apply Modal */}
       {showApplyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-modal w-full max-w-lg shadow-modal animate-in fade-in zoom-in duration-200">
-            <div className="p-6 border-b border-border flex justify-between items-center">
-              <h3 className="text-xl font-bold">Apply for Leave</h3>
-              <button onClick={() => setShowApplyModal(false)} className="text-text-muted hover:text-text-primary">&times;</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowApplyModal(false)} />
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 rounded-[40px] w-full max-w-lg shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="p-8 border-b border-border dark:border-white/10 flex justify-between items-center">
+              <h3 className="text-2xl font-black text-text-primary">Apply for Leave</h3>
+              <button onClick={() => setShowApplyModal(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors"><X className="w-5 h-5 text-text-muted" /></button>
             </div>
-            <form onSubmit={handleApply} className="p-6 space-y-6">
+            <form onSubmit={handleApply} className="p-8 space-y-6">
               <div className="space-y-4">
-                <label className="text-sm font-bold text-text-secondary">Leave Type</label>
-                <div className="grid grid-cols-3 gap-4">
-                  {['Sick', 'Casual', 'Earned'].map(t => (
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Leave Type</label>
+                <div className="grid grid-cols-2 gap-4">
+                  {['Sick', 'Casual'].map(t => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setForm({...form, leave_type: t})}
-                      className={`p-3 rounded-xl border-2 transition-all text-center ${
-                        form.leave_type === t ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:border-gray-300'
+                      className={`p-4 rounded-2xl border-2 transition-all text-center ${
+                        form.leave_type === t ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 dark:border-white/10 hover:border-gray-200 dark:hover:border-white/20'
                       }`}
                     >
-                      <span className="text-sm font-bold">{t}</span>
+                      <span className="text-sm font-black">{t}</span>
                     </button>
                   ))}
                 </div>
@@ -278,32 +332,33 @@ const Leaves: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-text-secondary">From Date</label>
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">From Date</label>
                   <input 
-                    type="date" required className="input"
+                    type="date" required className="input h-14 px-5 rounded-2xl border-none font-bold"
                     value={form.from_date} onChange={e => setForm({...form, from_date: e.target.value})}
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-text-secondary">To Date</label>
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">To Date</label>
                   <input 
-                    type="date" required className="input"
+                    type="date" required className="input h-14 px-5 rounded-2xl border-none font-bold"
                     value={form.to_date} onChange={e => setForm({...form, to_date: e.target.value})}
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-bold text-text-secondary">Reason</label>
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Reason for Leave</label>
                 <textarea 
-                  required className="input min-h-[100px] py-3"
+                  required className="input min-h-[120px] py-4 px-5 rounded-2xl border-none font-medium text-sm leading-relaxed"
+                  placeholder="Please describe why you need this leave..."
                   value={form.reason} onChange={e => setForm({...form, reason: e.target.value})}
                 />
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4">
-                <button type="button" onClick={() => setShowApplyModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Submit Application</button>
+              <div className="flex space-x-4 pt-6">
+                <button type="button" onClick={() => setShowApplyModal(false)} className="flex-1 h-14 rounded-2xl font-black text-text-muted uppercase tracking-widest hover:bg-gray-100 transition-all">Cancel</button>
+                <button type="submit" className="flex-1 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all">Submit</button>
               </div>
             </form>
           </div>

@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -8,19 +9,20 @@ export default {
     extend: {
       colors: {
         primary: {
-          DEFAULT: "#3B5BDB",
-          hover: "#3451C7",
+          DEFAULT: "rgb(var(--primary) / <alpha-value>)",
+          hover: "rgb(var(--primary-hover) / <alpha-value>)",
         },
-        success: "#2F9E44",
-        warning: "#F08C00",
-        danger: "#E03131",
-        purple: "#7048E8",
-        background: "#F8F9FA",
-        border: "#DEE2E6",
+        success: "rgb(var(--success) / <alpha-value>)",
+        warning: "rgb(var(--warning) / <alpha-value>)",
+        danger: "rgb(var(--danger) / <alpha-value>)",
+        purple: "rgb(var(--purple) / <alpha-value>)",
+        background: "rgb(var(--background) / <alpha-value>)",
+        glass: "rgb(var(--glass) / <alpha-value>)",
+        border: "rgb(var(--border) / <alpha-value>)",
         text: {
-          primary: "#212529",
-          secondary: "#495057",
-          muted: "#868E96",
+          primary: "rgb(var(--text-primary) / <alpha-value>)",
+          secondary: "rgb(var(--text-secondary) / <alpha-value>)",
+          muted: "rgb(var(--text-muted) / <alpha-value>)",
         }
       },
       fontFamily: {

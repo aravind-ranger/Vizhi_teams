@@ -5,26 +5,60 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --primary: 59 91 219;
+    --primary-hover: 52 81 199;
+    --success: 47 158 68;
+    --warning: 240 140 0;
+    --danger: 224 49 49;
+    --purple: 112 72 232;
+    --background: 248 249 250;
+    --glass: 255 255 255;
+    --border: 222 226 230;
+    --text-primary: 33 37 41;
+    --text-secondary: 73 80 87;
+    --text-muted: 134 142 150;
+  }
+
+  .dark {
+    --primary: 92 124 255;
+    --primary-hover: 110 140 255;
+    --success: 81 207 102;
+    --warning: 255 192 52;
+    --danger: 255 135 135;
+    --purple: 151 119 255;
+    --background: 11 17 32;
+    --glass: 23 32 53;
+    --border: 45 55 75;
+    --text-primary: 255 255 255;
+    --text-secondary: 209 213 219;
+    --text-muted: 156 163 175;
+  }
+
   body {
-    @apply bg-background text-text-primary font-sans antialiased;
+    @apply bg-background text-text-primary font-sans antialiased transition-colors duration-300;
   }
 }
 
 @layer components {
+  .glass {
+    @apply bg-glass/70 backdrop-blur-md border border-border/50;
+  }
+
   .btn-primary {
     @apply bg-primary hover:bg-primary-hover text-white rounded-button font-medium transition px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
   
   .btn-secondary {
-    @apply bg-white border border-gray-300 hover:bg-gray-50 text-text-primary rounded-button font-medium transition px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-glass border border-border hover:bg-glass/90 text-text-primary rounded-button font-medium transition px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .card {
-    @apply bg-white rounded-card shadow-card border border-border;
+    @apply bg-glass rounded-card shadow-card border border-border;
   }
 
   .input {
-    @apply border border-gray-300 rounded-input px-3 py-2 focus:ring-4 focus:ring-primary focus:ring-opacity-20 focus:border-primary outline-none transition w-full;
+    @apply border border-gray-300 dark:border-border rounded-input px-3 py-2 focus:ring-4 focus:ring-primary focus:ring-opacity-20 focus:border-primary outline-none transition w-full bg-white dark:bg-glass text-text-primary;
   }
 }
 

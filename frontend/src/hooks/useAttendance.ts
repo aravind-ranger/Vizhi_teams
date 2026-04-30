@@ -32,6 +32,7 @@ export const useAttendance = () => {
         early_exit: false,
         duration_minutes: 0,
         work_location: workLocation || 'office',
+        total_break_ms: 0,
         created_at: now
       };
 
@@ -199,11 +200,14 @@ export const useAttendance = () => {
     try {
       const now = new Date();
       const pauseStart = new Date(attendance.pause_start);
-      const breakMinutes = Math.floor((now.getTime() - pauseStart.getTime()) / 60000);
+      const breakMs = now.getTime() - pauseStart.getTime();
+      const breakMinutes = Math.floor(breakMs / 60000);
+      const newTotalBreakMs = (attendance.total_break_ms || 0) + breakMs;
 
       await updateDoc(doc(db, 'attendance', attendance.id), {
         is_paused: false,
-        pause_start: null
+        pause_start: null,
+        total_break_ms: newTotalBreakMs
       });
 
       // Resume auto-paused tasks
@@ -239,7 +243,12 @@ export const useAttendance = () => {
         created_at: now
       });
 
-      setAttendance({ ...attendance, is_paused: false, pause_start: null });
+      setAttendance({ 
+        ...attendance, 
+        is_paused: false, 
+        pause_start: null,
+        total_break_ms: newTotalBreakMs 
+      });
 
       // Broadcast notification
       await addDoc(collection(db, 'notifications'), {

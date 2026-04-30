@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase.ts';
-import { collection, query, getDocs, orderBy, addDoc, doc, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, addDoc, doc, setDoc, serverTimestamp, deleteDoc, where } from 'firebase/firestore';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { toast } from 'react-hot-toast';
@@ -46,6 +46,8 @@ const Employees: React.FC = () => {
   });
   useTitle('Team Members');
 
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     fetchEmployees();
   }, []);
@@ -59,6 +61,19 @@ const Employees: React.FC = () => {
         ...doc.data()
       })) as Employee[];
       setEmployees(employeeData);
+
+      // Fetch today's attendance to show presence dots
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const attRef = collection(db, 'attendance');
+      const qAtt = query(attRef, where('created_at', '>=', todayStart));
+      const attSnap = await getDocs(qAtt);
+      const attMap: Record<string, boolean> = {};
+      attSnap.docs.forEach(d => {
+        attMap[d.data().user_id] = true;
+      });
+      setAttendanceMap(attMap);
+
     } catch (err) {
       console.error(err);
       toast.error('Failed to load team members');
@@ -167,7 +182,7 @@ const Employees: React.FC = () => {
               placeholder="Search by name or department..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-14 pl-12 pr-4 glass border-none rounded-[20px] focus:ring-4 focus:ring-primary/10 shadow-sm outline-none font-medium"
+              className="w-full h-14 pl-12 pr-4 input border-none shadow-sm font-medium"
             />
           </div>
         </div>
@@ -189,7 +204,7 @@ const Employees: React.FC = () => {
 
               <div className="relative z-10 flex flex-col h-full">
                 <div className="flex justify-between items-start mb-8">
-                  <Avatar name={employee.name} size="xl" url={employee.avatar_url} className="ring-4 ring-white shadow-xl" />
+                  <Avatar name={employee.name} size="xl" url={employee.avatar_url} className="ring-4 ring-white dark:ring-white/10 shadow-xl" />
                   <div className="relative">
                     <button
                       onClick={(e) => {
@@ -201,7 +216,7 @@ const Employees: React.FC = () => {
                       <MoreHorizontal className="w-5 h-5 text-text-muted" />
                     </button>
                     {openMenuId === employee.id && user?.role === 'admin' && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-glass rounded-2xl shadow-2xl border border-gray-100 dark:border-white/10 py-2 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
                         <button
                           onClick={() => {
                             setEmployeeToDelete(employee);
@@ -223,6 +238,7 @@ const Employees: React.FC = () => {
                     <h3 className="text-xl font-black text-text-primary group-hover:text-primary transition-colors">
                       {employee.name}
                     </h3>
+                    <div className={`w-2 h-2 rounded-full ${attendanceMap[employee.id] ? 'bg-success' : 'bg-danger'}`} title={attendanceMap[employee.id] ? 'Present' : 'Absent'} />
                     {employee.role === 'admin' && <ShieldCheck className="w-4 h-4 text-primary" />}
                   </div>
                   <p className="text-sm font-bold text-primary/80 uppercase tracking-widest">
@@ -262,7 +278,7 @@ const Employees: React.FC = () => {
       {showAddModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !isCreating && setShowAddModal(false)} />
-          <div className="relative bg-white w-full max-w-xl rounded-[40px] p-10 shadow-2xl animate-scale-up">
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-xl rounded-[40px] p-10 shadow-2xl animate-scale-up">
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-3xl font-black text-text-primary">Add Team Member</h2>
               <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-all">
@@ -276,7 +292,7 @@ const Employees: React.FC = () => {
                 <input
                   type="text" required
                   placeholder="enter username"
-                  className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all outline-none"
+                  className="input h-14 px-6 border-none font-bold"
                   value={newEmp.name}
                   onChange={(e) => setNewEmp({ ...newEmp, name: e.target.value })}
                 />
@@ -285,10 +301,10 @@ const Employees: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Department</label>
-                  <input
+                   <input
                     type="text" required
                     placeholder="choose what you want to work on"
-                    className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all outline-none"
+                    className="input h-14 px-6 border-none font-bold"
                     value={newEmp.department}
                     onChange={(e) => setNewEmp({ ...newEmp, department: e.target.value })}
                   />
@@ -297,7 +313,7 @@ const Employees: React.FC = () => {
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Role</label>
                   <select
                     required
-                    className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all appearance-none outline-none"
+                    className="input h-14 px-6 border-none font-bold appearance-none"
                     value={newEmp.role}
                     onChange={(e) => setNewEmp({ ...newEmp, role: e.target.value as any })}
                   >
@@ -313,7 +329,7 @@ const Employees: React.FC = () => {
                 <input
                   type="email"
                   placeholder="Add your mail id if you want to"
-                  className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all outline-none"
+                  className="input h-14 px-6 border-none font-bold"
                   value={newEmp.email}
                   onChange={(e) => setNewEmp({ ...newEmp, email: e.target.value })}
                 />
@@ -341,7 +357,7 @@ const Employees: React.FC = () => {
       {showDeleteModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
-          <div className="relative bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl animate-scale-up text-center">
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-sm rounded-[40px] p-10 shadow-2xl animate-scale-up text-center">
             <div className="w-20 h-20 bg-danger/10 rounded-full flex items-center justify-center mx-auto mb-6 text-danger">
               <Trash2 className="w-10 h-10" />
             </div>

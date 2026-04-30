@@ -16,7 +16,8 @@ import StatusBadge from '../components/StatusBadge';
 import PriorityBadge from '../components/PriorityBadge';
 import Avatar from '../components/Avatar';
 import { db, auth } from '../firebase.ts';
-import { collection, query, where, getDocs, limit, orderBy, doc, updateDoc, serverTimestamp, getCountFromServer, writeBatch, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, orderBy, doc, updateDoc, serverTimestamp, getCountFromServer, writeBatch, getDoc, onSnapshot, Timestamp } from 'firebase/firestore';
+import UserListModal from '../components/UserListModal';
 
 const Dashboard: React.FC = () => {
   const safeFormat = (dateStr: any, fmt: string) => {
@@ -40,103 +41,136 @@ const Dashboard: React.FC = () => {
   const [showEventPicker, setShowEventPicker] = useState(false);
   const [selectedEventDetail, setSelectedEventDetail] = useState<any>(null);
   const [isPromoting, setIsPromoting] = useState(false);
+  const [showPresentModal, setShowPresentModal] = useState(false);
+  const [showAbsentModal, setShowAbsentModal] = useState(false);
+  const [presentEmployees, setPresentEmployees] = useState<any[]>([]);
   useTitle('Dashboard');
 
   useEffect(() => {
-    fetchDashboardData();
     if (user?.availability_status) {
       setCurrentStatus(user.availability_status);
     }
-  }, [user]);
+  }, [user?.availability_status]);
 
-  const fetchDashboardData = async () => {
+  useEffect(() => {
     if (!user) return;
-    setIsLoading(true);
-    try {
-      // 1. Fetch Tasks
-      const tasksRef = collection(db, 'tasks');
-      const qTasks = query(
-        tasksRef,
-        where('assigned_to', '==', user.id),
-        orderBy('created_at', 'desc'),
-        limit(3)
-      );
-      const tasksSnap = await getDocs(qTasks);
-      const tasksData = tasksSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-      setTasks(tasksData);
 
-      // 2. Calculate Stats
-      const qTotal = query(tasksRef, where('assigned_to', '==', user.id));
-      const qInProgress = query(tasksRef, where('assigned_to', '==', user.id), where('status', '==', 'in_progress'));
+    // 1. Fetch Basic Stats & Tasks
+    const fetchInitialData = async () => {
+      try {
+        const tasksRef = collection(db, 'tasks');
+        const qTasks = query(tasksRef, where('assigned_to', '==', user.id));
+        const tasksSnap = await getDocs(qTasks);
+        const tasksData = tasksSnap.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data(),
+          created_at: doc.data().created_at?.toDate ? doc.data().created_at.toDate() : new Date(doc.data().created_at)
+        })).sort((a: any, b: any) => b.created_at - a.created_at).slice(0, 3);
+        setTasks(tasksData);
 
-      const [totalCount, inProgressCount] = await Promise.all([
-        getCountFromServer(qTotal),
-        getCountFromServer(qInProgress)
-      ]);
+        const qInProgress = query(tasksRef, where('assigned_to', '==', user.id), where('status', '==', 'in_progress'));
+        const inProgressSnap = await getCountFromServer(qInProgress);
+        
+        const qDone = query(tasksRef, where('assigned_to', '==', user.id), where('status', '==', 'done'));
+        const doneSnap = await getCountFromServer(qDone);
 
-      // 3. Fetch Minutes Today from Attendance (In-memory filtering to avoid index issues)
-      const attRef = collection(db, 'attendance');
-      const qAtt = query(attRef, where('user_id', '==', user.id));
-      const attSnap = await getDocs(qAtt);
+        setStats(prev => ({
+          ...prev,
+          total_tasks: tasksSnap.size,
+          in_progress: inProgressSnap.data().count,
+          completed: doneSnap.data().count
+        }));
+      } catch (err) {
+        console.error("Dashboard initial fetch error:", err);
+      }
+    };
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+    fetchInitialData();
 
-      let minutesToday = 0;
-      attSnap.forEach(doc => {
-        const data = doc.data();
+    // 2. Real-time Team Presence
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const usersRef = collection(db, 'users');
+    const leavesRef = collection(db, 'leaves');
+    const attRef = collection(db, 'attendance');
+
+    let allUsers: any[] = [];
+    
+    const unsubscribeUsers = onSnapshot(query(usersRef, where('is_active', '==', true)), (userSnap) => {
+      allUsers = userSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      updateTeamStats();
+    });
+
+    let onLeaveUserIds = new Set();
+    const unsubscribeLeaves = onSnapshot(query(leavesRef, where('status', '==', 'approved')), (leaveSnap) => {
+      onLeaveUserIds = new Set();
+      leaveSnap.docs.forEach(d => {
+        const leave = d.data();
+        const from = leave.from_date?.toDate ? leave.from_date.toDate() : new Date(leave.from_date);
+        const to = leave.to_date?.toDate ? leave.to_date.toDate() : new Date(leave.to_date);
+        if (todayStart >= from && todayStart <= to) {
+          onLeaveUserIds.add(leave.user_id);
+        }
+      });
+      updateTeamStats();
+    });
+
+    let presentUsers: any[] = [];
+    const unsubscribeAtt = onSnapshot(attRef, (attSnap) => {
+      const presentIds = new Set();
+      const records: any[] = [];
+      attSnap.docs.forEach(d => {
+        const data = d.data();
         const createdAt = data.created_at?.toDate ? data.created_at.toDate() : new Date(data.created_at);
-        if (createdAt >= today) {
-          minutesToday += data.duration_minutes || 0;
+        if (createdAt >= todayStart && createdAt <= todayEnd) {
+          presentIds.add(data.user_id);
+          records.push({ id: d.id, ...data, createdAt });
         }
       });
 
-      setStats({
-        total_tasks: totalCount.data().count,
-        in_progress: inProgressCount.data().count,
-        minutes_today: minutesToday
-      });
+      presentUsers = records;
+      updateTeamStats();
+    });
 
-      // 4. Fetch Scrum for today
-      const scrumRef = collection(db, 'scrums');
-      const todayDate = format(new Date(), 'yyyy-MM-dd');
-      const qScrum = query(scrumRef, where('user_id', '==', user.id), orderBy('created_at', 'desc'), limit(1));
-      const scrumSnap = await getDocs(qScrum);
-      
-      let hasScrumToday = false;
-      if (!scrumSnap.empty) {
-        const lastScrumDate = scrumSnap.docs[0].data().created_at?.toDate ? format(scrumSnap.docs[0].data().created_at.toDate(), 'yyyy-MM-dd') : null;
-        hasScrumToday = lastScrumDate === todayDate;
-      }
+    const updateTeamStats = () => {
+      if (allUsers.length === 0) return;
 
-      // 5. Calculate Efficiency Score (0-100)
-      let score = 0;
-      
-      // Task Completion (40 pts)
-      const totalTasksCount = totalCount.data().count;
-      const completedTasksCount = stats?.total_tasks - stats?.in_progress; // Approximate or fetch properly
-      // For now let's fetch all tasks count for this user to be accurate
-      const qDone = query(tasksRef, where('assigned_to', '==', user.id), where('status', '==', 'done'));
-      const doneCount = await getCountFromServer(qDone);
-      const taskScore = totalTasksCount > 0 ? (doneCount.data().count / totalTasksCount) * 40 : 40;
-      score += taskScore;
+      const presentIds = new Set(presentUsers.map(r => r.user_id));
+      const presentList = allUsers
+        .filter(u => presentIds.has(u.id))
+        .map(u => {
+          const userRecords = presentUsers.filter(r => r.user_id === u.id)
+            .sort((a, b) => b.createdAt - a.createdAt);
+          return { ...u, check_in: userRecords[0]?.check_in, work_location: userRecords[0]?.work_location };
+        });
 
-      // Attendance (30 pts)
-      const punctualityScore = attendance?.check_in ? (new Date(attendance.check_in).getHours() < 10 ? 10 : 5) : 0;
-      const durationScore = Math.min(20, (minutesToday / 480) * 20);
-      score += punctualityScore + durationScore;
+      const onLeaveList = allUsers.filter(u => onLeaveUserIds.has(u.id));
+      const absentList = allUsers.filter(u => 
+        !presentIds.has(u.id) && 
+        !onLeaveUserIds.has(u.id) && 
+        u.role !== 'admin'
+      );
 
-      // Scrum (30 pts)
-      // Scrum (30 pts)
-      score += hasScrumToday ? 30 : 0;
-      setEfficiency(Math.round(score));
-
-    } catch (err) {
-      console.error('Error fetching dashboard data:', err);
-    } finally {
+      setPresentEmployees(presentList);
+      setAbsentEmployees(absentList);
+      setStats(prev => ({
+        ...prev,
+        present_count: presentList.length,
+        absent_count: absentList.length,
+        on_leave_count: onLeaveList.length
+      }));
       setIsLoading(false);
-    }
-  };
+    };
+
+    return () => {
+      unsubscribeUsers();
+      unsubscribeLeaves();
+      unsubscribeAtt();
+    };
+  }, [user]);
 
   useEffect(() => {
     // Subscribe to Calendar Events
@@ -161,6 +195,16 @@ const Dashboard: React.FC = () => {
   }, [user?.role]);
 
   const toggleTimer = async (taskId: string, isActive: boolean) => {
+    if (!attendance?.check_in || attendance?.check_out) {
+      toast.error('You must be checked in to work on tasks ⚠️');
+      return;
+    }
+
+    if (attendance?.is_paused) {
+      toast.error('Please resume work before interacting with task timers');
+      return;
+    }
+
     try {
       const taskRef = doc(db, 'tasks', taskId);
       if (isActive) {
@@ -174,7 +218,6 @@ const Dashboard: React.FC = () => {
           status: 'in_progress'
         });
       }
-      fetchDashboardData();
     } catch (err: any) {
       console.error(err);
     }
@@ -186,14 +229,16 @@ const Dashboard: React.FC = () => {
       interval = setInterval(() => {
         const checkInTime = new Date(attendance.check_in!);
         const now = new Date();
-        const diff = 8 * 3600 - differenceInSeconds(now, checkInTime);
+        const breakSeconds = (attendance.total_break_ms || 0) / 1000;
+        const diff = 8 * 3600 - (differenceInSeconds(now, checkInTime) - breakSeconds);
         setTimeLeft(diff);
       }, 1000);
       return () => clearInterval(interval);
     } else if (attendance?.is_paused && attendance.pause_start) {
       const checkInTime = new Date(attendance.check_in!);
       const pauseTime = new Date(attendance.pause_start);
-      const diff = 8 * 3600 - differenceInSeconds(pauseTime, checkInTime);
+      const breakSeconds = (attendance.total_break_ms || 0) / 1000;
+      const diff = 8 * 3600 - (differenceInSeconds(pauseTime, checkInTime) - breakSeconds);
       setTimeLeft(diff);
     } else if (!attendance?.check_in) {
       setTimeLeft(null);
@@ -205,9 +250,12 @@ const Dashboard: React.FC = () => {
     const absSeconds = Math.abs(seconds);
     const h = Math.floor(absSeconds / 3600);
     const m = Math.floor((absSeconds % 3600) / 60);
-    const s = absSeconds % 60;
+    const s = Math.floor(absSeconds % 60);
+    
+    const pad = (n: number) => String(n).padStart(2, '0');
+    
     return {
-      text: `${h}h ${m}m ${s}s`,
+      text: `${pad(h)}:${pad(m)}:${pad(s)}`,
       isOvertime
     };
   };
@@ -222,23 +270,8 @@ const Dashboard: React.FC = () => {
   const statCards = [
     { label: 'Total Tasks', value: stats?.total_tasks || 0, icon: Briefcase, color: 'text-primary', bg: 'bg-primary/10' },
     { label: 'In Progress', value: stats?.in_progress || 0, icon: PlayCircle, color: 'text-warning', bg: 'bg-warning/10' },
-    { 
-      label: 'Hours Today', 
-      value: (() => {
-        let totalMins = stats?.minutes_today || 0;
-        if (attendance?.check_in && !attendance?.check_out && !attendance?.is_paused) {
-          const currentSessionMins = Math.floor((new Date().getTime() - new Date(attendance.check_in).getTime()) / 60000);
-          // This is a rough estimate since we don't subtract breaks in real-time here easily without more complex logic
-          // But it satisfies "total timing the users checkin hours"
-          totalMins = Math.max(totalMins, currentSessionMins);
-        }
-        return (totalMins / 60).toFixed(1) + 'h';
-      })(), 
-      icon: Clock, 
-      color: 'text-purple', 
-      bg: 'bg-purple/10' 
-    },
-    { label: 'Efficiency', value: `${efficiency}%`, icon: TrendingUp, color: 'text-success', bg: 'bg-success/10' },
+    { label: 'Present Today', value: stats?.present_count || 0, icon: UserPlus, color: 'text-success', bg: 'bg-success/10', action: () => setShowPresentModal(true) },
+    { label: 'Absent', value: stats?.absent_count || 0, icon: AlertTriangle, color: 'text-danger', bg: 'bg-danger/10', action: () => setShowAbsentModal(true) },
   ];
 
   return (
@@ -303,7 +336,11 @@ const Dashboard: React.FC = () => {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((stat, i) => (
-          <div key={i} className="glass p-8 rounded-[32px] flex items-center space-x-6 border-none shadow-sm hover:shadow-xl transition-all group cursor-default">
+          <div 
+            key={i} 
+            onClick={stat.action}
+            className={`glass p-8 rounded-[32px] flex items-center space-x-6 border-none shadow-sm hover:shadow-xl transition-all group ${stat.action ? 'cursor-pointer active:scale-95' : 'cursor-default'}`}
+          >
             <div className={`p-4 rounded-2xl ${stat.bg} group-hover:scale-110 transition-transform`}>
               <stat.icon className={`w-8 h-8 ${stat.color}`} />
             </div>
@@ -317,25 +354,25 @@ const Dashboard: React.FC = () => {
 
       {/* Admin Absence Tracker */}
       {user?.role === 'admin' && absentEmployees.length > 0 && (
-        <div className="glass p-8 rounded-[40px] border-none shadow-sm bg-rose-50/50 border-rose-100/50">
+        <div className="glass p-8 rounded-[40px] border-none shadow-sm bg-rose-50/50 dark:bg-rose-900/10 border-rose-100/50 dark:border-rose-900/20">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
-              <div className="p-2 bg-rose-100 rounded-xl">
-                <AlertTriangle className="w-5 h-5 text-rose-600" />
+              <div className="p-2 bg-rose-100 dark:bg-rose-900/30 rounded-xl">
+                <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400" />
               </div>
-              <h3 className="text-xl font-black text-rose-900">Absent Today</h3>
+              <h3 className="text-xl font-black text-rose-900 dark:text-rose-100">Absent Today</h3>
             </div>
-            <span className="text-[10px] font-black bg-rose-100 text-rose-600 px-3 py-1.5 rounded-xl uppercase tracking-widest">
+            <span className="text-[10px] font-black bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 px-3 py-1.5 rounded-xl uppercase tracking-widest">
               {absentEmployees.length} EMPLOYEES
             </span>
           </div>
           <div className="flex flex-wrap gap-4">
             {absentEmployees.map((emp) => (
-              <div key={emp.id} className="flex items-center space-x-3 bg-white p-3 rounded-2xl shadow-sm border border-rose-100/50">
+              <div key={emp.id} className="flex items-center space-x-3 bg-white dark:bg-white/5 p-3 rounded-2xl shadow-sm border border-rose-100/50 dark:border-rose-900/20">
                 <Avatar name={emp.name} size="xs" />
                 <div>
                   <p className="text-xs font-bold text-text-primary">{emp.name}</p>
-                  <p className="text-[9px] font-black text-rose-500 uppercase tracking-tighter">No Check-in</p>
+                  <p className="text-[9px] font-black text-rose-500 dark:text-rose-400 uppercase tracking-tighter">No Check-in</p>
                 </div>
               </div>
             ))}
@@ -365,12 +402,12 @@ const Dashboard: React.FC = () => {
 
             <div className="relative z-10">
               {isAttLoading ? (
-                <div className="bg-white/50 backdrop-blur-sm rounded-[32px] p-16 text-center border border-white/20">
+                <div className="bg-white/50 dark:bg-white/5 backdrop-blur-sm rounded-[32px] p-16 text-center border border-white/20 dark:border-white/10">
                   <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4" />
                   <p className="text-sm font-bold text-text-muted uppercase tracking-widest">Restoring session...</p>
                 </div>
               ) : !attendance?.check_in ? (
-                <div className="bg-white/50 backdrop-blur-sm rounded-[32px] p-16 text-center border border-white/20">
+                <div className="bg-white/5 dark:bg-white/5 backdrop-blur-sm rounded-[32px] p-16 text-center border border-white/20">
                   <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-8">
                     <Zap className="w-10 h-10 text-primary fill-current" />
                   </div>
@@ -382,7 +419,7 @@ const Dashboard: React.FC = () => {
                   </div>
                 </div>
               ) : attendance.check_out ? (
-                <div className="bg-success/5 border border-success/20 rounded-[32px] p-12 text-center">
+                <div className="bg-success/5 dark:bg-success/10 border border-success/20 dark:border-success/30 rounded-[32px] p-12 text-center">
                   <CheckCircle2 className="w-16 h-16 text-success mx-auto mb-6" />
                   <h4 className="text-3xl font-black text-success mb-2">Shift Completed!</h4>
                   <p className="text-text-secondary font-bold mb-8">You've done a great job today. See you tomorrow!</p>
@@ -405,8 +442,8 @@ const Dashboard: React.FC = () => {
                       <p className="text-[10px] text-text-muted uppercase font-black tracking-widest mb-2">Check-in</p>
                       <p className="text-3xl font-black">{safeFormat(attendance.check_in, 'HH:mm a')}</p>
                     </div>
-                    <div className={`text-center p-8 rounded-[32px] border min-w-[280px] transition-all ${attendance.is_paused ? 'bg-amber-50 border-amber-200' : 'bg-primary/5 border-primary/10'}`}>
-                      <p className={`text-[10px] uppercase font-black tracking-widest mb-2 ${attendance.is_paused ? 'text-amber-600' : 'text-primary'}`}>
+                    <div className={`text-center p-8 rounded-[32px] border min-w-[280px] transition-all ${attendance.is_paused ? 'bg-amber-500/10 border-amber-500/20' : 'bg-primary/5 border-primary/10'}`}>
+                      <p className={`text-[10px] uppercase font-black tracking-widest mb-2 ${attendance.is_paused ? 'text-amber-500' : 'text-primary'}`}>
                         {attendance.is_paused ? 'Break Time' : 'Time Remaining'}
                       </p>
                       {timeLeft !== null && (
@@ -451,7 +488,7 @@ const Dashboard: React.FC = () => {
                 <h3 className="text-xl font-black">Active Tasks</h3>
                 <button
                   onClick={() => navigate('/tasks')}
-                  className="p-2 hover:bg-white/50 rounded-full transition-colors"
+                  className="p-2 hover:bg-white/50 dark:hover:bg-white/10 rounded-full transition-colors"
                 >
                   <ArrowRight className="w-5 h-5 text-primary" />
                 </button>
@@ -460,9 +497,9 @@ const Dashboard: React.FC = () => {
                 {isLoading ? [1, 2].map(i => <div key={i} className="skeleton h-20 rounded-2xl" />) :
                   tasks.length === 0 ? <p className="text-sm text-text-muted text-center py-4">No active tasks</p> :
                     tasks.map(task => (
-                      <div key={task.id} className="flex items-center justify-between p-4 bg-white/50 rounded-2xl border border-white/20 hover:shadow-md transition-all cursor-pointer group">
+                      <div key={task.id} className="flex items-center justify-between p-4 bg-white/5 dark:bg-white/5 rounded-2xl border border-white/20 hover:shadow-md transition-all cursor-pointer group">
                         <div className="flex items-center space-x-3">
-                          <div className={`w-2 h-2 rounded-full ${task.active_session_id ? 'bg-primary animate-ping' : 'bg-gray-300'}`} />
+                          <div className={`w-2 h-2 rounded-full ${task.active_session_id ? 'bg-primary animate-ping' : 'bg-gray-300 dark:bg-gray-700'}`} />
                           <span className="text-sm font-bold truncate max-w-[150px]">{task.title}</span>
                         </div>
                         <div className="flex items-center space-x-3">
@@ -519,9 +556,9 @@ const Dashboard: React.FC = () => {
                 <button
                   key={i}
                   onClick={() => navigate(action.path)}
-                  className="flex flex-col items-center justify-center p-6 rounded-[24px] bg-white/50 border border-white/20 hover:shadow-xl hover:scale-105 transition-all group"
+                  className="flex flex-col items-center justify-center p-6 rounded-[24px] bg-white/5 dark:bg-white/5 border border-white/10 dark:border-white/5 hover:shadow-xl hover:scale-105 transition-all group"
                 >
-                  <div className={`p-4 rounded-2xl mb-4 group-hover:scale-110 transition-transform ${action.color} group-hover:bg-white`}>
+                  <div className={`p-4 rounded-2xl mb-4 group-hover:scale-110 transition-transform ${action.color} dark:bg-white/10 dark:text-white group-hover:bg-white dark:group-hover:bg-primary`}>
                     <action.icon className="w-6 h-6" />
                   </div>
                   <span className="text-[10px] font-black uppercase tracking-widest text-text-secondary">{action.label}</span>
@@ -566,7 +603,7 @@ const Dashboard: React.FC = () => {
                   </div>
                 ))
               ) : (
-                <div className="py-10 text-center bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+                <div className="py-10 text-center bg-gray-50/50 dark:bg-white/5 rounded-2xl border border-dashed border-gray-200 dark:border-white/10">
                   <CalendarIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                   <p className="text-xs font-bold text-text-muted uppercase tracking-widest">No Upcoming Events</p>
                   <p className="text-[10px] text-gray-400 mt-1">Check back later for updates</p>
@@ -580,10 +617,10 @@ const Dashboard: React.FC = () => {
       {showEventPicker && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowEventPicker(false)} />
-          <div className="relative bg-white w-full max-w-lg rounded-[40px] shadow-2xl animate-scale-up overflow-hidden">
-            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-              <h3 className="text-xl font-black">Select Dashboard Events</h3>
-              <button onClick={() => setShowEventPicker(false)} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><X className="w-5 h-5" /></button>
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-border w-full max-w-lg rounded-[40px] shadow-2xl animate-scale-up overflow-hidden">
+            <div className="p-8 border-b border-gray-100 dark:border-border flex justify-between items-center bg-gray-50/50 dark:bg-transparent">
+              <h3 className="text-xl font-black text-text-primary">Select Dashboard Events</h3>
+              <button onClick={() => setShowEventPicker(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-white/10 rounded-full transition-colors text-text-muted"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-8 max-h-[60vh] overflow-y-auto space-y-4">
               <p className="text-xs font-bold text-text-muted uppercase tracking-widest mb-4">Select events to display on dashboard</p>
@@ -635,7 +672,7 @@ const Dashboard: React.FC = () => {
                 ))
               )}
             </div>
-            <div className="p-8 bg-gray-50 border-t border-gray-100 flex justify-end">
+            <div className="p-8 bg-gray-50 dark:bg-white/5 border-t border-gray-100 dark:border-white/10 flex justify-end">
               <button 
                 onClick={() => setShowEventPicker(false)}
                 className="px-10 py-4 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
@@ -651,7 +688,7 @@ const Dashboard: React.FC = () => {
       {selectedEventDetail && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelectedEventDetail(null)} />
-          <div className="relative bg-white w-full max-w-md rounded-[40px] shadow-2xl animate-scale-up overflow-hidden">
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-border w-full max-w-md rounded-[40px] shadow-2xl animate-scale-up overflow-hidden">
             <div className={`h-3 w-full ${
               selectedEventDetail.type === 'holiday' ? 'bg-rose-500' : 
               selectedEventDetail.type === 'meeting' ? 'bg-indigo-500' : 'bg-amber-500'
@@ -680,7 +717,7 @@ const Dashboard: React.FC = () => {
               <div className="space-y-6">
                 <div>
                   <p className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-2">Description</p>
-                  <p className="text-sm font-medium text-text-secondary leading-relaxed bg-gray-50 p-6 rounded-3xl border border-gray-100">
+                  <p className="text-sm font-medium text-text-secondary leading-relaxed bg-gray-50 dark:bg-white/5 p-6 rounded-3xl border border-gray-100 dark:border-white/10">
                     {selectedEventDetail.description || 'No description provided for this event.'}
                   </p>
                 </div>
@@ -696,7 +733,6 @@ const Dashboard: React.FC = () => {
                             });
                             toast.success('Removed from dashboard');
                             setSelectedEventDetail(null);
-                            fetchDashboardData();
                           } catch (err) {
                             toast.error('Failed to remove event');
                           }
@@ -720,6 +756,22 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* User List Modals */}
+      <UserListModal
+        isOpen={showPresentModal}
+        onClose={() => setShowPresentModal(false)}
+        title="Present Today"
+        users={presentEmployees}
+        type="present"
+      />
+      <UserListModal
+        isOpen={showAbsentModal}
+        onClose={() => setShowAbsentModal(false)}
+        title="Absent Users"
+        users={absentEmployees}
+        type="absent"
+      />
     </div>
   );
 };

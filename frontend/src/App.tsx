@@ -56,9 +56,20 @@ const ProtectedRoute = ({ children, roles }: { children: React.ReactNode, roles?
   );
 };
 
+import { useThemeStore } from './store/useThemeStore';
+
 function App() {
   const { setAuth, logout } = useAuthStore();
+  const { theme } = useThemeStore();
   const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
 
   React.useEffect(() => {
     let profileUnsubscribe: () => void = () => {};

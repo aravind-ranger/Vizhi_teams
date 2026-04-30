@@ -13,6 +13,7 @@ export interface AttendanceRecord {
   user_id: string;
   is_paused?: boolean;
   pause_start?: string;
+  total_break_ms?: number;
 }
 
 interface AttendanceStore {
@@ -39,23 +40,28 @@ export const useAttendanceStore = create<AttendanceStore>((set) => ({
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
-      // Fetch the most recent 5 records for this user (avoids complex index requirements)
+      // Fetch all records for this user and sort client-side to avoid complex index requirements
       const q = query(
         collection(db, 'attendance'),
-        where('user_id', '==', userId),
-        orderBy('created_at', 'desc'),
-        limit(5)
+        where('user_id', '==', userId)
       );
 
       const snap = await getDocs(q);
       
       if (!snap.empty) {
         // Find if any record was created today
-        const records = snap.docs.map(d => ({ id: d.id, ...d.data() } as AttendanceRecord));
+        const records = snap.docs.map(d => {
+          const data = d.data();
+          return {
+            id: d.id,
+            ...data,
+            created_at: data.created_at?.toDate ? data.created_at.toDate() : new Date(data.created_at)
+          } as any as AttendanceRecord;
+        }).sort((a: any, b: any) => b.created_at.getTime() - a.created_at.getTime());
         
         // Priority 1: Today's record (even if completed)
         const todayRecord = records.find(r => {
-          const createdAt = (r as any).created_at?.toDate ? (r as any).created_at.toDate() : new Date((r as any).created_at);
+          const createdAt = (r as any).created_at;
           return createdAt.getTime() >= startOfToday;
         });
 

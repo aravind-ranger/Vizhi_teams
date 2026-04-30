@@ -81,38 +81,38 @@ const AdminLogs: React.FC = () => {
         <p className="text-sm text-text-muted">Real-time audit trail of all employee activities</p>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white/30 backdrop-blur-md p-4 rounded-2xl border border-white/20">
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between glass p-4 rounded-2xl border-none shadow-sm">
         <div className="relative flex-1 max-w-md w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input 
             type="text" 
             placeholder="Search by employee or details..." 
-            className="input pl-10 h-11 bg-white/50 border-none shadow-sm focus:bg-white"
+            className="input pl-10 h-11 border-none shadow-sm focus:bg-white dark:focus:bg-white/10"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         <div className="flex gap-3 w-full md:w-auto">
           <select 
-            className="input h-11 px-4 bg-white/50 border-none shadow-sm focus:bg-white text-sm font-medium cursor-pointer"
+            className="input h-11 px-4 border-none shadow-sm dark:bg-white/5 dark:focus:bg-white/10 text-sm font-medium cursor-pointer text-text-primary"
             value={actionFilter}
             onChange={(e) => setActionFilter(e.target.value)}
           >
-            <option value="all">All Actions</option>
-            <option value="checkin">Check-in</option>
-            <option value="checkout">Check-out</option>
-            <option value="pause">Break Start</option>
-            <option value="resume">Break End</option>
-            <option value="task_start">Task Start</option>
-            <option value="task_stop">Task Complete</option>
+            <option value="all" className="dark:bg-slate-800">All Actions</option>
+            <option value="checkin" className="dark:bg-slate-800">Check-in</option>
+            <option value="checkout" className="dark:bg-slate-800">Check-out</option>
+            <option value="pause" className="dark:bg-slate-800">Break Start</option>
+            <option value="resume" className="dark:bg-slate-800">Break End</option>
+            <option value="task_start" className="dark:bg-slate-800">Task Start</option>
+            <option value="task_stop" className="dark:bg-slate-800">Task Complete</option>
           </select>
-          <button className="h-11 px-4 rounded-xl glass border-none hover:bg-white/80 transition-all shadow-sm">
+          <button className="h-11 px-4 rounded-xl glass border-none hover:bg-white/80 dark:hover:bg-white/10 transition-all shadow-sm">
             <Filter className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      <div className="glass rounded-[40px] overflow-hidden border-none shadow-sm bg-white/40">
+      <div className="glass rounded-[40px] overflow-hidden border-none shadow-sm">
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-white/20 text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
@@ -127,7 +127,7 @@ const AdminLogs: React.FC = () => {
             {isLoading ? (
               [1, 2, 3, 4, 5].map(i => (
                 <tr key={i} className="border-b border-white/10 animate-pulse">
-                  <td colSpan={5} className="px-8 py-6"><div className="h-4 bg-gray-200 rounded w-full" /></td>
+                  <td colSpan={5} className="px-8 py-6"><div className="h-4 bg-gray-200 dark:bg-white/10 rounded w-full" /></td>
                 </tr>
               ))
             ) : filteredLogs.length === 0 ? (
@@ -136,7 +136,7 @@ const AdminLogs: React.FC = () => {
               </tr>
             ) : (
               filteredLogs.map((log) => (
-                <tr key={log.id} className="border-b border-white/10 hover:bg-white/60 transition-all group">
+                <tr key={log.id} className="border-b border-white/10 hover:bg-white/60 dark:hover:bg-white/5 transition-all group">
                   <td className="px-8 py-6">
                     <div className="flex flex-col">
                       <span className="text-sm font-bold text-text-primary">{format(log.created_at, 'h:mm:ss a')}</span>
@@ -151,10 +151,10 @@ const AdminLogs: React.FC = () => {
                   </td>
                   <td className="px-8 py-6">
                     <div className="flex items-center space-x-2">
-                      <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <div className="p-2 bg-white dark:bg-white/10 rounded-lg shadow-sm">
                         {getActionIcon(log.action)}
                       </div>
-                      <span className="text-xs font-black uppercase tracking-widest">{log.action.replace('_', ' ')}</span>
+                      <span className="text-xs font-black uppercase tracking-widest text-text-primary">{log.action.replace('_', ' ')}</span>
                     </div>
                   </td>
                   <td className="px-8 py-6">

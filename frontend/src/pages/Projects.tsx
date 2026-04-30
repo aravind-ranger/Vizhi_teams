@@ -180,7 +180,7 @@ const Projects: React.FC = () => {
       </div>
 
       {/* Filters Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/30 backdrop-blur-md p-4 rounded-2xl border border-white/20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/30 dark:bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-white/20 dark:border-white/5">
         <div className="flex space-x-1">
           {['All', 'Active', 'Completed', 'On Hold'].map(f => (
             <button
@@ -198,7 +198,7 @@ const Projects: React.FC = () => {
           <input
             type="text"
             placeholder="Search projects..."
-            className="input pl-10 bg-white/50 border-none shadow-sm focus:bg-white"
+            className="input pl-10 border-none shadow-sm focus:bg-white dark:focus:bg-glass"
           />
         </div>
       </div>
@@ -224,7 +224,7 @@ const Projects: React.FC = () => {
                 className={`group glass p-8 rounded-[40px] border-none shadow-sm transition-all relative overflow-hidden ${isMember ? 'hover:shadow-2xl hover:-translate-y-2 cursor-pointer' : 'opacity-70 cursor-not-allowed'}`}
               >
                 {!isMember && (
-                  <div className="absolute top-4 right-4 z-20 bg-white/80 p-2 rounded-xl backdrop-blur-sm shadow-sm">
+                  <div className="absolute top-4 right-4 z-20 bg-white/80 dark:bg-white/10 p-2 rounded-xl backdrop-blur-sm shadow-sm">
                     <Lock className="w-5 h-5 text-text-muted" />
                   </div>
                 )}
@@ -245,7 +245,7 @@ const Projects: React.FC = () => {
                         <MoreVertical className="w-4 h-4" />
                       </button>
                       {openMenuId === project.id && (
-                        <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-[100] animate-in fade-in zoom-in duration-150">
+                        <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-glass rounded-xl shadow-xl border border-gray-100 dark:border-white/10 py-1 z-[100] animate-in fade-in zoom-in duration-150">
                           <button 
                             onClick={(e) => { 
                               e.stopPropagation(); 
@@ -329,26 +329,26 @@ const Projects: React.FC = () => {
       {showCreateModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowCreateModal(false)} />
-          <div className="relative bg-white w-full max-w-2xl rounded-[40px] p-10 shadow-2xl animate-scale-up overflow-y-auto max-h-[90vh]">
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-2xl rounded-[40px] p-10 shadow-2xl animate-scale-up overflow-y-auto max-h-[90vh]">
             <h2 className="text-3xl font-black text-text-primary mb-8">Create New Project</h2>
 
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Project Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g., Q2 Marketing Campaign"
-                  className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all"
-                  value={newProject.name}
-                  onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                />
+                  <input
+                    type="text"
+                    placeholder="e.g., Q2 Marketing Campaign"
+                    className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all text-text-primary"
+                    value={newProject.name}
+                    onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                  />
               </div>
 
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Description</label>
                 <textarea
                   placeholder="What is this project about?"
-                  className="w-full h-32 p-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all resize-none"
+                  className="w-full h-32 p-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all resize-none text-text-primary"
                   value={newProject.description}
                   onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
                 />
@@ -365,7 +365,7 @@ const Projects: React.FC = () => {
                           prev.includes(emp.id) ? prev.filter(id => id !== emp.id) : [...prev, emp.id]
                         );
                       }}
-                      className={`flex items-center space-x-3 p-3 rounded-2xl border-2 transition-all ${selectedMembers.includes(emp.id) ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'
+                      className={`flex items-center space-x-3 p-3 rounded-2xl border-2 transition-all ${selectedMembers.includes(emp.id) ? 'border-primary bg-primary/5' : 'border-gray-100 dark:border-white/10 hover:border-gray-200 dark:hover:border-white/20'
                         }`}
                     >
                       <Avatar name={emp.name} size="xs" />
@@ -382,7 +382,7 @@ const Projects: React.FC = () => {
               <div className="flex space-x-4 pt-6">
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="flex-1 h-14 rounded-2xl font-black text-text-muted uppercase tracking-widest hover:bg-gray-100 transition-all"
+                  className="flex-1 h-14 rounded-2xl font-black text-text-muted uppercase tracking-widest hover:bg-gray-100 dark:hover:bg-white/10 transition-all"
                 >
                   Cancel
                 </button>
@@ -402,14 +402,14 @@ const Projects: React.FC = () => {
       {showEditModal && selectedProject && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowEditModal(false)} />
-          <div className="relative bg-white w-full max-w-2xl rounded-[40px] p-10 shadow-2xl animate-scale-up overflow-y-auto max-h-[90vh]">
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-2xl rounded-[40px] p-10 shadow-2xl animate-scale-up overflow-y-auto max-h-[90vh]">
             <h2 className="text-3xl font-black text-text-primary mb-8">Edit Project</h2>
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Project Name</label>
                 <input
                   type="text"
-                  className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all"
+                  className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all text-text-primary"
                   value={selectedProject.name}
                   onChange={(e) => setSelectedProject({ ...selectedProject, name: e.target.value })}
                 />
@@ -417,7 +417,7 @@ const Projects: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Description</label>
                 <textarea
-                  className="w-full h-32 p-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all resize-none"
+                  className="w-full h-32 p-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all resize-none text-text-primary"
                   value={selectedProject.description}
                   onChange={(e) => setSelectedProject({ ...selectedProject, description: e.target.value })}
                 />
@@ -433,7 +433,7 @@ const Projects: React.FC = () => {
                           prev.includes(emp.id) ? prev.filter(id => id !== emp.id) : [...prev, emp.id]
                         );
                       }}
-                      className={`flex items-center space-x-3 p-3 rounded-2xl border-2 transition-all ${selectedMembers.includes(emp.id) ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'
+                      className={`flex items-center space-x-3 p-3 rounded-2xl border-2 transition-all ${selectedMembers.includes(emp.id) ? 'border-primary bg-primary/5' : 'border-gray-100 dark:border-white/10 hover:border-gray-200 dark:hover:border-white/20'
                         }`}
                     >
                       <Avatar name={emp.name} size="xs" />
@@ -446,7 +446,7 @@ const Projects: React.FC = () => {
                 </div>
               </div>
               <div className="flex space-x-4 pt-6">
-                <button onClick={() => setShowEditModal(false)} className="flex-1 h-14 rounded-2xl font-black text-text-muted uppercase tracking-widest hover:bg-gray-100 transition-all">Cancel</button>
+                <button onClick={() => setShowEditModal(false)} className="flex-1 h-14 rounded-2xl font-black text-text-muted uppercase tracking-widest hover:bg-gray-100 dark:hover:bg-white/10 transition-all">Cancel</button>
                 <button onClick={handleUpdateProject} className="flex-1 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all">Save Changes</button>
               </div>
             </div>
@@ -458,15 +458,15 @@ const Projects: React.FC = () => {
       {showDeleteModal && projectToDelete && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
-          <div className="relative bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl animate-scale-up text-center">
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-sm rounded-[40px] p-10 shadow-2xl animate-scale-up text-center">
             <div className="w-20 h-20 bg-danger/10 rounded-full flex items-center justify-center mx-auto mb-6">
               <Briefcase className="w-10 h-10 text-danger" />
             </div>
             <h2 className="text-2xl font-black text-text-primary mb-2">Delete Project?</h2>
             <p className="text-text-muted font-medium mb-8 text-sm">Are you sure you want to delete "{projectToDelete.name}"? All associated data will be lost.</p>
             <div className="flex flex-col gap-3">
-              <button onClick={handleDeleteProject} className="h-14 bg-danger text-white rounded-2xl font-black shadow-lg shadow-danger/20 hover:scale-[1.02] active:scale-95 transition-all">Yes, Delete Project</button>
-              <button onClick={() => setShowDeleteModal(false)} className="h-14 rounded-2xl font-bold text-text-secondary hover:bg-gray-100 transition-all">No, Keep it</button>
+               <button onClick={handleDeleteProject} className="h-14 bg-danger text-white rounded-2xl font-black shadow-lg shadow-danger/20 hover:scale-[1.02] active:scale-95 transition-all">Yes, Delete Project</button>
+              <button onClick={() => setShowDeleteModal(false)} className="h-14 rounded-2xl font-bold text-text-secondary hover:bg-gray-100 dark:hover:bg-white/10 transition-all">No, Keep it</button>
             </div>
           </div>
         </div>

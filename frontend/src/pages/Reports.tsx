@@ -158,7 +158,7 @@ const Reports: React.FC = () => {
           </button>
           <div className="relative">
             <select 
-              className="input pr-10 appearance-none bg-white font-bold text-sm"
+              className="input pr-10 appearance-none font-bold text-sm"
               value={dateRange}
               onChange={e => setDateRange(e.target.value)}
             >
@@ -191,11 +191,11 @@ const Reports: React.FC = () => {
       {/* Charts Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         <div className="card p-8">
-          <h3 className="text-lg font-bold mb-8">Weekly Work Hours</h3>
+          <h3 className="text-lg font-bold text-text-primary mb-8">Weekly Work Hours</h3>
           <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={reportData.barData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F3F5" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-border/30" />
                 <XAxis 
                   dataKey="name" 
                   axisLine={false} 
@@ -208,8 +208,8 @@ const Reports: React.FC = () => {
                   tick={{ fill: '#868E96', fontSize: 12, fontWeight: 500 }} 
                 />
                 <Tooltip 
-                  cursor={{ fill: '#F8F9FA' }}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  cursor={{ fill: 'currentColor', className: 'text-border/10' }}
+                  contentStyle={{ borderRadius: '16px', border: 'none', backgroundColor: 'var(--glass)', color: 'var(--text-primary)', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}
                 />
                 <Bar 
                   dataKey="hours" 
@@ -223,7 +223,7 @@ const Reports: React.FC = () => {
         </div>
 
         <div className="card p-8">
-          <h3 className="text-lg font-bold mb-8">Task Status Distribution</h3>
+          <h3 className="text-lg font-bold text-text-primary mb-8">Task Status Distribution</h3>
           <div className="h-80 w-full flex items-center">
             {reportData.pieData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -261,7 +261,7 @@ const Reports: React.FC = () => {
       {/* Detailed Table */}
       <div className="card overflow-hidden">
         <div className="p-6 border-b border-border flex justify-between items-center">
-          <h3 className="text-lg font-bold">Recent Task Activity</h3>
+          <h3 className="text-lg font-bold text-text-primary">Recent Task Activity</h3>
           <button className="text-sm text-primary font-bold hover:underline">View All Tasks</button>
         </div>
         <div className="overflow-x-auto">
@@ -276,14 +276,14 @@ const Reports: React.FC = () => {
             </thead>
             <tbody>
               {reportData.logs.length > 0 ? reportData.logs.map((row, i) => (
-                <tr key={i} className="border-b border-border hover:bg-gray-50 transition-colors">
+                <tr key={i} className="border-b border-border hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
                   <td className="px-6 py-4 text-sm text-text-secondary font-medium">{row.date}</td>
                   <td className="px-6 py-4">
                     <p className="text-sm font-bold text-text-primary">{row.task}</p>
                     <p className="text-xs text-text-muted">{row.project}</p>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="px-2 py-1 rounded text-[10px] font-bold uppercase bg-gray-100 text-gray-600">
+                    <span className="px-2 py-1 rounded text-[10px] font-bold uppercase bg-gray-100 dark:bg-white/5 text-text-muted">
                       {row.status}
                     </span>
                   </td>

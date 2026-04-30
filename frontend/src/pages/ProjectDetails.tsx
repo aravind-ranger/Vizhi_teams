@@ -46,6 +46,10 @@ interface Task {
   assigned_to: string;
   is_project_task?: boolean;
   created_by?: string;
+  active_session_id?: string;
+  active_session_start?: string;
+  is_paused_by_break?: boolean;
+  total_minutes_logged?: number;
 }
 
 const COLUMNS = [
@@ -113,12 +117,12 @@ const ProjectDetails: React.FC = () => {
   // Sync tasks with Attendance Breaks
   useEffect(() => {
     const syncBreakWithTasks = async () => {
-      const activeTask = tasks.find(t => (t as any).active_session_id === 'active');
-      const autoPausedTask = tasks.find(t => (t as any).is_paused_by_break === true);
+      const activeTask = tasks.find(t => t.active_session_id === 'active' && t.assigned_to === user?.id);
+      const autoPausedTask = tasks.find(t => t.is_paused_by_break === true && t.assigned_to === user?.id);
 
       if (isPaused && activeTask) {
         const taskRef = doc(db, 'tasks', activeTask.id);
-        const startTime = new Date((activeTask as any).active_session_start!).getTime();
+        const startTime = new Date(activeTask.active_session_start!).getTime();
         const durationMinutes = Math.floor((new Date().getTime() - startTime) / 60000);
 
         await addDoc(collection(db, 'task_sessions'), {
@@ -318,7 +322,6 @@ const ProjectDetails: React.FC = () => {
             <p className="text-text-muted mt-1">{project?.description}</p>
           </div>
           <div className="flex items-center space-x-3">
-            <button className="p-2 hover:bg-gray-100 rounded-lg text-text-secondary"><Settings className="w-5 h-5" /></button>
             {user?.role === 'admin' && (
               <button 
                 onClick={() => setShowCreateModal(true)}
