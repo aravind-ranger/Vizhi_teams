@@ -359,6 +359,12 @@ const Tasks: React.FC = () => {
       const taskSnap = await getDoc(taskRef);
       const data = taskSnap.data();
 
+      // SECURITY: Only the assigned user can toggle the timer
+      if (data?.assigned_to !== user?.id) {
+        toast.error("Access Denied: You can only manage your own task timers ✋");
+        return;
+      }
+
       if (isActive) {
         // Stop timer
         if (data?.active_session_start) {
@@ -910,17 +916,17 @@ const Tasks: React.FC = () => {
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Project</label>
                     <select 
-                      required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer"
+                      required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
                       value={form.project_id} onChange={e => setForm({...form, project_id: e.target.value})}
                     >
-                      <option value="">Select Project</option>
-                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      <option value="" className="dark:bg-slate-800">Select Project</option>
+                      {projects.map(p => <option key={p.id} value={p.id} className="dark:bg-slate-800">{p.name}</option>)}
                     </select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Est. Hours</label>
                     <input 
-                      type="number" step="0.5" required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold" 
+                      type="number" step="0.5" required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold dark:text-white" 
                       placeholder="e.g. 4.5"
                       value={form.estimated_hours} onChange={e => setForm({...form, estimated_hours: parseFloat(e.target.value)})}
                     />
@@ -931,22 +937,22 @@ const Tasks: React.FC = () => {
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Lead Assigned</label>
                     <select 
-                      required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer"
+                      required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
                       value={form.assigned_to} onChange={e => setForm({...form, assigned_to: e.target.value})}
                     >
-                      <option value="">Select Team Member</option>
-                      {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                      <option value="" className="dark:bg-slate-800">Select Team Member</option>
+                      {employees.map(e => <option key={e.id} value={e.id} className="dark:bg-slate-800">{e.name}</option>)}
                     </select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Priority</label>
                     <select 
-                      className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer"
+                      className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
                       value={form.priority} onChange={e => setForm({...form, priority: e.target.value})}
                     >
-                      <option value="low">Low Priority</option>
-                      <option value="medium">Medium Priority</option>
-                      <option value="high">High Priority</option>
+                      <option value="low" className="dark:bg-slate-800">Low Priority</option>
+                      <option value="medium" className="dark:bg-slate-800">Medium Priority</option>
+                      <option value="high" className="dark:bg-slate-800">High Priority</option>
                     </select>
                   </div>
                 </div>

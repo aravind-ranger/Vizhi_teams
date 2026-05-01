@@ -21,15 +21,29 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
-  const { attendance, checkIn, checkOut, pause, resume, isBlocked, isLoading: isAttLoading } = useAttendance();
+  const { attendance, checkIn, checkOut, pause, resume, startOvertime, isBlocked, isLoading: isAttLoading } = useAttendance();
   
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [isCheckoutConfirmed, setIsCheckoutConfirmed] = useState(false);
-  const [showOvertimeModal, setShowOvertimeModal] = useState(false);
-  const [overtimeHours, setOvertimeHours] = useState('1');
   const [hasNotifiedShiftEnd, setHasNotifiedShiftEnd] = useState(false);
   const [hasNotifiedScrum, setHasNotifiedScrum] = useState(false);
+  const [showAllNotifs, setShowAllNotifs] = useState(false);
+  const notifRef = React.useRef<HTMLDivElement>(null);
+  const userMenuRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -218,18 +232,30 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
               </div>
             )}
 
-            {/* Overtime Button */}
-            {attendance?.check_in && !attendance?.check_out && (
+            {/* Overtime Button - Enabled after 8 hours or if checked out */}
+            {attendance?.check_in && !attendance.is_overtime && (
               <button 
-                onClick={() => setShowOvertimeModal(true)}
+                onClick={startOvertime}
                 disabled={(() => {
                   const checkInTime = new Date(attendance.check_in);
                   const diffHours = (new Date().getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
-                  return diffHours < 8;
+                  return diffHours < 8 && !attendance.check_out;
                 })()}
-                className="flex items-center px-4 py-2 bg-amber-500 text-white text-xs font-bold rounded-lg shadow-sm hover:scale-105 active:scale-95 transition-all disabled:opacity-30 disabled:grayscale disabled:scale-100"
+                className={`flex items-center px-4 py-2 text-white text-xs font-bold rounded-lg shadow-sm hover:scale-105 active:scale-95 transition-all disabled:opacity-30 disabled:grayscale disabled:scale-100 ${attendance.check_out ? 'bg-indigo-600' : 'bg-amber-500'}`}
               >
-                Overtime
+                <ClockIcon className="w-3 h-3 mr-2" />
+                {attendance.check_out ? 'Extra Overtime' : 'Start Overtime'}
+              </button>
+            )}
+
+            {/* End Overtime Button */}
+            {attendance?.is_overtime && (
+              <button 
+                onClick={() => setShowCheckoutModal(true)}
+                className="flex items-center px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow-sm hover:scale-105 active:scale-95 transition-all animate-pulse"
+              >
+                <ClockIcon className="w-3 h-3 mr-2" />
+                End Overtime
               </button>
             )}
 
@@ -261,8 +287,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
             </div>
           </div>
 
-          {/* Notifications */}
-          <div className="relative">
+          <div className="relative" ref={notifRef}>
             <button 
               onClick={() => setShowNotifications(!showNotifications)}
               className="p-2 text-text-secondary hover:bg-gray-100 dark:hover:bg-white/10 rounded-full relative"
@@ -276,14 +301,19 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
             {showNotifications && (
               <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-glass rounded-xl shadow-modal border border-border dark:border-white/10 overflow-hidden">
                 <div className="p-4 border-b border-border dark:border-white/10 flex justify-between items-center bg-white dark:bg-transparent">
-                  <span className="font-bold text-text-primary">Notifications</span>
+                  <span className="font-bold text-text-primary">Notifications (Today)</span>
                   <button onClick={markAllRead} className="text-xs text-primary font-medium hover:underline">Mark all as read</button>
                 </div>
                 <div className="max-h-96 overflow-y-auto">
-                  {notifications.length === 0 ? (
-                    <div className="p-8 text-center text-text-muted text-xs font-medium">No notifications yet</div>
-                  ) : (
-                    notifications.map((n) => (
+                  {(() => {
+                    const today = format(new Date(), 'yyyy-MM-dd');
+                    const todayNotifs = notifications.filter(n => format(new Date(n.created_at), 'yyyy-MM-dd') === today);
+                    
+                    if (todayNotifs.length === 0) {
+                      return <div className="p-8 text-center text-text-muted text-xs font-medium">No notifications for today</div>;
+                    }
+
+                    return todayNotifs.map((n) => (
                       <div 
                         key={n.id} 
                         className={`p-4 border-b border-border transition-colors cursor-pointer ${!n.is_read ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-gray-50'}`}
@@ -335,18 +365,23 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
                         )}
                         <p className="text-[10px] text-text-muted mt-2 font-bold uppercase tracking-widest">{format(new Date(n.created_at), 'h:mm a')}</p>
                       </div>
-                    ))
-                  )}
+                    ));
+                  })()}
                 </div>
                 <div className="p-3 text-center border-t border-border">
-                  <button className="text-sm text-text-muted hover:text-primary font-medium">View all</button>
+                  <button 
+                    onClick={() => { setShowNotifications(false); setShowAllNotifs(true); }}
+                    className="text-sm text-text-muted hover:text-primary font-medium"
+                  >
+                    View all notifications
+                  </button>
                 </div>
               </div>
             )}
           </div>
 
           {/* User Dropdown */}
-          <div className="relative">
+          <div className="relative" ref={userMenuRef}>
             <button 
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center space-x-2 p-1 pl-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors"
@@ -506,54 +541,64 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
           </div>
         </div>
       )}
-      {/* Overtime Modal */}
-      {showOvertimeModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-text-primary/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setShowOvertimeModal(false)} />
-          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-sm p-10 rounded-[40px] shadow-2xl animate-scale-up text-center">
-            <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-              <ClockIcon className="w-10 h-10 text-amber-600" />
-            </div>
-            <h3 className="text-2xl font-black text-text-primary mb-3">Start Overtime?</h3>
-            <p className="text-text-muted mb-8 font-medium">How many hours of overtime are you planning to work?</p>
-            
-            <div className="space-y-4">
-              <input 
-                type="number" 
-                min="1" max="8"
-                value={overtimeHours}
-                onChange={(e) => setOvertimeHours(e.target.value)}
-                className="w-full h-14 text-center text-xl font-black bg-gray-50 rounded-2xl border-none focus:ring-4 focus:ring-amber-500/10 outline-none"
-              />
-              <div className="flex flex-col space-y-3">
-                <button
-                  onClick={async () => {
-                    try {
-                      await addDoc(collection(db, 'admin_logs'), {
-                        user_id: user?.id,
-                        user_name: user?.name,
-                        action: 'overtime_start',
-                        details: `${user?.name} started ${overtimeHours}h overtime`,
-                        hours: overtimeHours,
-                        created_at: serverTimestamp()
-                      });
-                      toast.success(`Overtime started for ${overtimeHours} hours!`);
-                      setShowOvertimeModal(false);
-                    } catch (err) {
-                      toast.error('Failed to log overtime');
-                    }
-                  }}
-                  className="w-full h-14 bg-amber-500 text-white font-black rounded-2xl shadow-xl shadow-amber-500/20 hover:scale-[1.02] active:scale-95 transition-all"
-                >
-                  Start Overtime
-                </button>
-                <button
-                  onClick={() => setShowOvertimeModal(false)}
-                  className="w-full h-14 text-text-muted font-black uppercase tracking-widest hover:text-text-primary transition-colors"
-                >
-                  Cancel
-                </button>
+
+      {/* View All Notifications Modal */}
+      {showAllNotifs && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAllNotifs(false)} />
+          <div className="relative bg-white dark:bg-[#0B1120] w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-scale-up">
+            <div className="p-8 border-b border-border dark:border-white/5 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
+              <div>
+                <h3 className="text-2xl font-black text-text-primary tracking-tighter">All Notifications</h3>
+                <p className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] mt-1">Full activity history</p>
               </div>
+              <button 
+                onClick={() => setShowAllNotifs(false)}
+                className="w-12 h-12 flex items-center justify-center bg-white dark:bg-white/10 rounded-2xl shadow-sm hover:text-danger transition-all active:scale-90 text-text-primary"
+              >
+                <AlertTriangle className="w-6 h-6 rotate-45" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-8 space-y-8">
+              {(() => {
+                const grouped: { [key: string]: any[] } = {};
+                notifications.forEach(n => {
+                  const date = format(new Date(n.created_at), 'yyyy-MM-dd');
+                  if (!grouped[date]) grouped[date] = [];
+                  grouped[date].push(n);
+                });
+
+                const sortedDates = Object.keys(grouped).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+                if (sortedDates.length === 0) {
+                  return <div className="p-20 text-center text-text-muted font-bold">No history available</div>;
+                }
+
+                return sortedDates.map((date, idx) => (
+                  <div key={date} className="space-y-4">
+                    <div className="flex items-center space-x-4">
+                      <div className="h-[2px] flex-1 bg-slate-900 dark:bg-white/20" />
+                      <span className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-[0.3em] whitespace-nowrap bg-slate-100 dark:bg-white/10 px-4 py-1.5 rounded-full">
+                        {format(new Date(date), 'EEEE, MMMM d, yyyy')}
+                      </span>
+                      <div className="h-[2px] flex-1 bg-slate-900 dark:bg-white/20" />
+                    </div>
+                    
+                    <div className="grid grid-cols-1 gap-4">
+                      {grouped[date].map((n) => (
+                        <div key={n.id} className={`p-6 rounded-[24px] border ${n.is_read ? 'bg-white dark:bg-white/5 border-border dark:border-white/5' : 'bg-primary/5 border-primary/20 shadow-sm shadow-primary/10'}`}>
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-black text-text-primary tracking-tight">{n.title}</h4>
+                            <span className="text-[10px] font-bold text-text-muted">{format(new Date(n.created_at), 'h:mm a')}</span>
+                          </div>
+                          <p className="text-sm text-text-secondary leading-relaxed">{n.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ));
+              })()}
             </div>
           </div>
         </div>

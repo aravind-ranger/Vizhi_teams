@@ -14,10 +14,12 @@ interface LogEntry {
   id: string;
   user_id: string;
   user_name: string;
-  action: 'checkin' | 'checkout' | 'pause' | 'resume' | 'task_start' | 'task_pause' | 'task_resume' | 'task_stop';
+  action: string;
   details: string;
   created_at: any;
   duration_minutes?: number;
+  shift_minutes?: number;
+  overtime_minutes?: number;
 }
 
 const AdminLogs: React.FC = () => {
@@ -40,11 +42,23 @@ const AdminLogs: React.FC = () => {
         limit(100)
       );
       const snap = await getDocs(q);
-      const logData = snap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        created_at: doc.data().created_at?.toDate() || new Date()
-      })) as LogEntry[];
+      const logData = snap.docs.map(doc => {
+        const data = doc.data();
+        let createdAt;
+        if (data.created_at?.toDate) {
+          createdAt = data.created_at.toDate();
+        } else if (data.created_at) {
+          createdAt = new Date(data.created_at);
+        } else {
+          createdAt = new Date();
+        }
+
+        return {
+          id: doc.id,
+          ...data,
+          created_at: createdAt
+        };
+      }) as any as LogEntry[];
       setLogs(logData);
     } catch (err) {
       console.error('Error fetching logs:', err);
@@ -54,8 +68,8 @@ const AdminLogs: React.FC = () => {
   };
 
   const filteredLogs = logs.filter(log => {
-    const matchesSearch = log.user_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         log.details.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (log.user_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+                         (log.details?.toLowerCase() || '').includes(searchTerm.toLowerCase());
     const matchesAction = actionFilter === 'all' || log.action === actionFilter;
     return matchesSearch && matchesAction;
   });
@@ -70,6 +84,8 @@ const AdminLogs: React.FC = () => {
       case 'task_resume':
       case 'task_start': return <Play className="w-4 h-4 text-primary" />;
       case 'task_stop': return <CheckCircle2 className="w-4 h-4 text-success" />;
+      case 'overtime_start':
+      case 'overtime_stop': return <Clock className="w-4 h-4 text-indigo-500" />;
       default: return <Clock className="w-4 h-4 text-text-muted" />;
     }
   };
@@ -105,6 +121,7 @@ const AdminLogs: React.FC = () => {
             <option value="resume" className="dark:bg-slate-800">Break End</option>
             <option value="task_start" className="dark:bg-slate-800">Task Start</option>
             <option value="task_stop" className="dark:bg-slate-800">Task Complete</option>
+            <option value="overtime_start" className="dark:bg-slate-800">Overtime Start</option>
           </select>
           <button className="h-11 px-4 rounded-xl glass border-none hover:bg-white/80 dark:hover:bg-white/10 transition-all shadow-sm">
             <Filter className="w-4 h-4" />
@@ -120,7 +137,9 @@ const AdminLogs: React.FC = () => {
               <th className="px-8 py-6">Employee</th>
               <th className="px-8 py-6">Action</th>
               <th className="px-8 py-6">Details</th>
-              <th className="px-8 py-6">Duration</th>
+              <th className="px-8 py-6 text-right">Shift (8h)</th>
+              <th className="px-8 py-6 text-right">Overtime</th>
+              <th className="px-8 py-6 text-right font-black">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -160,14 +179,26 @@ const AdminLogs: React.FC = () => {
                   <td className="px-8 py-6">
                     <p className="text-sm text-text-muted font-medium max-w-md line-clamp-1">{log.details}</p>
                   </td>
-                  <td className="px-8 py-6">
-                    {log.duration_minutes ? (
-                      <span className="text-xs font-black text-primary bg-primary/5 px-2.5 py-1.5 rounded-xl">
-                        {log.duration_minutes} min
+                  <td className="px-8 py-6 text-right">
+                    {log.shift_minutes ? (
+                      <span className="text-xs font-bold text-text-secondary">
+                        {Math.floor(log.shift_minutes / 60)}h {log.shift_minutes % 60}m
                       </span>
-                    ) : (
-                      <span className="text-xs text-text-muted">--</span>
-                    )}
+                    ) : '--'}
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    {log.overtime_minutes ? (
+                      <span className="text-xs font-black text-indigo-500 bg-indigo-500/5 px-2 py-1 rounded-lg">
+                        {Math.floor(log.overtime_minutes / 60)}h {log.overtime_minutes % 60}m
+                      </span>
+                    ) : '--'}
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    {log.duration_minutes ? (
+                      <span className="text-sm font-black text-primary">
+                        {(log.duration_minutes / 60).toFixed(1)}h
+                      </span>
+                    ) : '--'}
                   </td>
                 </tr>
               ))

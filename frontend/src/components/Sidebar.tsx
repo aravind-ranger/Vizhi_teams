@@ -69,15 +69,12 @@ const Sidebar: React.FC = () => {
 
   return (
     <div className={`fixed left-0 top-0 h-screen bg-white dark:bg-[#0B1120] border-r border-border transition-all duration-300 ease-in-out z-30 flex flex-col ${isCollapsed ? 'w-20' : 'w-[280px]'}`}>
-      <div className="h-[70px] flex items-center px-6 border-b border-border dark:border-white/5">
-        <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
-          <img src="/assets/logo.png" alt="Vizhi" className="w-full h-full object-contain" onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.src = 'https://ui-avatars.com/api/?name=V&background=000&color=fff';
-          }} />
+      <div className="h-[180px] flex flex-col items-center justify-center border-b border-border dark:border-white/5 py-4">
+        <div className={`transition-all duration-300 ${isCollapsed ? 'w-12 h-12' : 'w-[120px] h-[120px]'} flex items-center justify-center p-1 mb-2`}>
+          <img src="/vizhi.svg" alt="Vizhi" className="w-full h-full object-contain" />
         </div>
         {!isCollapsed && (
-          <span className="ml-3 font-bold text-lg text-text-primary whitespace-nowrap">Vizhi Teams</span>
+          <span className="font-black text-sm text-slate-900 dark:text-white tracking-tighter">VIZHI</span>
         )}
       </div>
 

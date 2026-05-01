@@ -14,6 +14,9 @@ export interface AttendanceRecord {
   is_paused?: boolean;
   pause_start?: string;
   total_break_ms?: number;
+  is_overtime?: boolean;
+  overtime_start?: string;
+  overtime_duration_minutes?: number;
 }
 
 interface AttendanceStore {
@@ -74,8 +77,8 @@ export const useAttendanceStore = create<AttendanceStore>((set) => ({
           return;
         }
 
-        // Priority 2: An open session from a previous day (handle it as active)
-        const openRecord = records.find(r => !r.check_out);
+        // Priority 2: An open session from TODAY (handle it as active)
+        const openRecord = records.find(r => !r.check_out && (r as any).created_at.getTime() >= startOfToday);
         if (openRecord) {
           set({ 
             attendance: openRecord, 

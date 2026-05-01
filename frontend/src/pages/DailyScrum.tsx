@@ -75,9 +75,11 @@ const DailyScrum: React.FC = () => {
   const fetchHistory = async (dateStr?: string) => {
     setIsLoading(true);
     try {
-      const targetDate = dateStr ? new Date(dateStr) : new Date();
-      const start = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-      const end = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59);
+      const targetDate = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+      const start = new Date(targetDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(targetDate);
+      end.setHours(23, 59, 59, 999);
 
       const q = query(
         collection(db, 'scrums'),
@@ -153,7 +155,7 @@ const DailyScrum: React.FC = () => {
           </div>
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
             <div className="space-y-3">
-              <label className="text-sm font-bold text-text-secondary">1. What did you do yesterday?</label>
+              <label className="text-sm font-bold text-text-secondary">1. What did you do yesterday? <span className="text-danger">*</span></label>
               <textarea 
                 required
                 className="input min-h-[120px] py-3 text-sm leading-relaxed"
@@ -164,7 +166,7 @@ const DailyScrum: React.FC = () => {
             </div>
             
             <div className="space-y-3">
-              <label className="text-sm font-bold text-text-secondary">2. What are you doing today?</label>
+              <label className="text-sm font-bold text-text-secondary">2. What are you doing today? <span className="text-danger">*</span></label>
               <textarea 
                 required
                 className="input min-h-[120px] py-3 text-sm leading-relaxed"

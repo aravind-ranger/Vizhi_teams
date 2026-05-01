@@ -55,37 +55,26 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
-    // 1. Fetch Basic Stats & Tasks
-    const fetchInitialData = async () => {
-      try {
-        const tasksRef = collection(db, 'tasks');
-        const qTasks = query(tasksRef, where('assigned_to', '==', user.id));
-        const tasksSnap = await getDocs(qTasks);
-        const tasksData = tasksSnap.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data(),
-          created_at: doc.data().created_at?.toDate ? doc.data().created_at.toDate() : new Date(doc.data().created_at)
-        })).sort((a: any, b: any) => b.created_at - a.created_at).slice(0, 3);
-        setTasks(tasksData);
-
-        const qInProgress = query(tasksRef, where('assigned_to', '==', user.id), where('status', '==', 'in_progress'));
-        const inProgressSnap = await getCountFromServer(qInProgress);
-        
-        const qDone = query(tasksRef, where('assigned_to', '==', user.id), where('status', '==', 'done'));
-        const doneSnap = await getCountFromServer(qDone);
-
-        setStats(prev => ({
-          ...prev,
-          total_tasks: tasksSnap.size,
-          in_progress: inProgressSnap.data().count,
-          completed: doneSnap.data().count
-        }));
-      } catch (err) {
-        console.error("Dashboard initial fetch error:", err);
-      }
-    };
-
-    fetchInitialData();
+    // 1. Real-time Stats & Tasks
+    const tasksRef = collection(db, 'tasks');
+    const qAll = query(tasksRef, where('assigned_to', '==', user.id));
+    
+    const unsubscribeStats = onSnapshot(qAll, (snap) => {
+      const allTasks = snap.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        created_at: doc.data().created_at?.toDate ? doc.data().created_at.toDate() : new Date(doc.data().created_at)
+      }));
+      
+      setTasks(allTasks.sort((a: any, b: any) => b.created_at - a.created_at).slice(0, 3));
+      
+      setStats(prev => ({
+        ...prev,
+        total_tasks: snap.size,
+        in_progress: allTasks.filter((t: any) => t.status === 'in_progress').length,
+        completed: allTasks.filter((t: any) => t.status === 'done').length
+      }));
+    });
 
     // 2. Real-time Team Presence
     const todayStart = new Date();
@@ -285,7 +274,7 @@ const Dashboard: React.FC = () => {
           <p className="text-text-muted mt-2 font-medium">Ready for another productive day at Vizhi?</p>
         </div>
         <div className="flex items-center space-x-3">
-          <div className="glass px-2 py-1.5 rounded-2xl flex items-center space-x-1 border-none shadow-sm">
+          <div className="bg-gray-50 dark:bg-white/5 px-2 py-1.5 rounded-2xl flex items-center space-x-1 border border-gray-100 dark:border-white/5 shadow-sm">
             {[
               { id: 'available', label: 'Available', color: 'bg-success', icon: Activity },
               { id: 'busy', label: 'Busy', color: 'bg-danger', icon: Lock },
@@ -323,10 +312,14 @@ const Dashboard: React.FC = () => {
                     toast.error('Failed to update status');
                   }
                 }}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all ${currentStatus === s.id ? 'bg-white shadow-md' : 'opacity-40 hover:opacity-100'}`}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all ${
+                  currentStatus === s.id 
+                  ? 'bg-white dark:bg-white/10 shadow-md scale-105' 
+                  : 'opacity-40 hover:opacity-100 hover:bg-white/50 dark:hover:bg-white/5'
+                }`}
               >
                 <div className={`w-2 h-2 rounded-full ${s.color}`} />
-                <span className="text-[10px] font-black uppercase tracking-widest text-text-secondary">{s.label}</span>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${currentStatus === s.id ? 'text-slate-900 dark:text-white' : 'text-text-secondary'}`}>{s.label}</span>
               </button>
             ))}
           </div>

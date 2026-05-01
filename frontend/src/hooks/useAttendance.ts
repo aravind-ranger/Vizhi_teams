@@ -71,17 +71,23 @@ export const useAttendance = () => {
     try {
       const now = new Date();
       const checkInTime = new Date(attendance.check_in!);
-      const durationMs = now.getTime() - checkInTime.getTime();
-      const durationMinutes = Math.floor(durationMs / 60000);
+      
+      // Calculate active duration (Total time - Break time)
+      const totalDurationMs = now.getTime() - checkInTime.getTime();
+      const breakMs = attendance.total_break_ms || 0;
+      const workMs = Math.max(0, totalDurationMs - breakMs);
+      const workMinutes = Math.floor(workMs / 60000);
       
       const scheduledCheckout = new Date(attendance.scheduled_checkout!);
       // Allow 15 minutes grace period
-      const isEarly = (scheduledCheckout.getTime() - now.getTime()) > (15 * 60 * 1000);
+      const isEarly = !attendance.is_overtime && (scheduledCheckout.getTime() - now.getTime()) > (15 * 60 * 1000);
 
       const updateData = {
         check_out: now.toISOString(),
-        duration_minutes: durationMinutes,
-        early_exit: isEarly
+        duration_minutes: workMinutes,
+        early_exit: isEarly,
+        status: 'completed',
+        is_overtime: false // Ensure OT is cleared on final checkout
       };
 
       await updateDoc(doc(db, 'attendance', attendance.id), updateData);
@@ -92,8 +98,8 @@ export const useAttendance = () => {
       // Broadcast notification
       await addDoc(collection(db, 'notifications'), {
         user_id: 'all',
-        title: 'Team Update',
-        message: `${user.name} checked out for the day`,
+        title: 'Work Ended',
+        message: `${user.name} checked out. Worked ${Math.floor(workMinutes/60)}h ${workMinutes%60}m.`,
         type: 'status_change',
         is_read: false,
         created_at: now
@@ -104,16 +110,18 @@ export const useAttendance = () => {
         user_id: user.id,
         user_name: user.name,
         action: 'checkout',
-        details: `${user.name} checked out. Worked for ${durationMinutes} minutes.`,
-        duration_minutes: durationMinutes,
+        details: `${user.name} checked out. Total: ${workMinutes} min (including OT if any)`,
+        duration_minutes: workMinutes,
+        shift_minutes: Math.min(480, workMinutes),
+        overtime_minutes: Math.max(0, workMinutes - 480),
         created_at: now
       });
 
       if (isEarly) {
-        toast.error(`⚠️ Early exit — ${(durationMinutes / 60).toFixed(1)}h worked. Admin notified. Login restricted`);
+        toast.error(`⚠️ Early exit — ${(workMinutes / 60).toFixed(1)}h worked. Admin notified.`);
         setIsBlocked(true);
       } else {
-        toast.success(`👏 Great work! ${(durationMinutes / 60).toFixed(1)}h worked today.`);
+        toast.success(`👏 Great work! ${(workMinutes / 60).toFixed(1)}h logged today.`);
       }
     } catch (err: any) {
       console.error(err);
@@ -267,9 +275,59 @@ export const useAttendance = () => {
     }
   };
 
+  const startOvertime = async () => {
+    if (!user?.id || !attendance?.id) return;
+    try {
+      const now = new Date();
+      const updateData: any = {
+        is_overtime: true,
+        overtime_start: now.toISOString(),
+        check_out: null, // Allow re-entry if they already checked out
+        status: 'overtime'
+      };
+
+      await updateDoc(doc(db, 'attendance', attendance.id), updateData);
+      setAttendance({ ...attendance, ...updateData });
+
+      // Notifications
+      await addDoc(collection(db, 'notifications'), {
+        user_id: 'all',
+        title: 'Overtime Started',
+        message: `${user.name} has started overtime work`,
+        type: 'overtime',
+        is_read: false,
+        created_at: now
+      });
+
+      // Audit Log
+      await addDoc(collection(db, 'audit_logs'), {
+        user_id: user.id,
+        user_name: user.name,
+        action: 'overtime_start',
+        details: `${user.name} started overtime`,
+        created_at: now
+      });
+
+      toast.success('Overtime session started! 🚀');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to start overtime');
+    }
+  };
+
   const refresh = () => {
     if (user?.id) fetchTodayAttendance(user.id);
   };
 
-  return { attendance, isBlocked, isLoading, checkIn, checkOut, pause, resume, refresh };
+  return { 
+    attendance, 
+    isBlocked, 
+    isLoading, 
+    checkIn, 
+    checkOut, 
+    pause, 
+    resume, 
+    startOvertime, 
+    refresh 
+  };
 };
