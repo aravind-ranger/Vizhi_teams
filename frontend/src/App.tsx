@@ -24,6 +24,7 @@ const CalendarPage = React.lazy(() => import('./pages/Calendar'));
 const FocusMode = React.lazy(() => import('./components/FocusMode'));
 const Leaves = React.lazy(() => import('./pages/Leaves'));
 const Sprints = React.lazy(() => import('./pages/Sprints'));
+const Meets = React.lazy(() => import('./pages/Meets'));
 const AdminLogs = React.lazy(() => import('./pages/AdminLogs.tsx'));
 const Profile = React.lazy(() => import('./pages/Profile'));
 
@@ -209,6 +210,11 @@ function App() {
         <Route path="/sprints" element={
           <ProtectedRoute>
             <Sprints />
+          </ProtectedRoute>
+        } />
+        <Route path="/meets" element={
+          <ProtectedRoute>
+            <Meets />
           </ProtectedRoute>
         } />
         <Route path="/daily-scrum" element={

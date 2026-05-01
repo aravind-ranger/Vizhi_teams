@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { 
+import {
   Users, Calendar, FileText, LayoutDashboard, Clock,
   Briefcase, FastForward, MessageSquare, PieChart,
-  ChevronLeft, ChevronRight, LogOut, Settings, Sun, Moon
+  ChevronLeft, ChevronRight, LogOut, Sun, Moon, Video
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
@@ -43,6 +43,7 @@ const Sidebar: React.FC = () => {
         { label: 'Projects', icon: Briefcase, path: '/projects', roles: ['admin', 'manager', 'employee'] },
         { label: 'All Tasks', icon: LayoutDashboard, path: '/tasks', roles: ['admin', 'manager', 'employee'] },
         { label: 'Sprints', icon: FastForward, path: '/sprints', roles: ['admin', 'manager', 'employee'] },
+        { label: 'Meets', icon: Video, path: '/meets', roles: ['admin', 'manager', 'employee'] },
         { label: 'Daily Scrum', icon: MessageSquare, path: '/daily-scrum', roles: ['admin', 'manager', 'employee'] },
       ]
     },
@@ -69,8 +70,8 @@ const Sidebar: React.FC = () => {
 
   return (
     <div className={`fixed left-0 top-0 h-screen bg-white dark:bg-[#0B1120] border-r border-border transition-all duration-300 ease-in-out z-30 flex flex-col ${isCollapsed ? 'w-20' : 'w-[280px]'}`}>
-      <div className="h-[180px] flex flex-col items-center justify-center border-b border-border dark:border-white/5 py-4">
-        <div className={`transition-all duration-300 ${isCollapsed ? 'w-12 h-12' : 'w-[120px] h-[120px]'} flex items-center justify-center p-1 mb-2`}>
+      <div className="h-[200px] flex flex-col items-center justify-center border-b border-border dark:border-white/5 py-4">
+        <div className={`transition-all duration-300 ${isCollapsed ? 'w-12 h-12' : 'w-[150px] h-[150px]'} flex items-center justify-center p-1 mb-2`}>
           <img src="/vizhi.svg" alt="Vizhi" className="w-full h-full object-contain" />
         </div>
         {!isCollapsed && (
@@ -98,8 +99,8 @@ const Sidebar: React.FC = () => {
                       onClick={() => setTheme(navItem.action as 'light' | 'dark')}
                       className={`
                         w-full flex items-center px-3 py-2.5 rounded-lg transition-all duration-200
-                        ${isActive 
-                          ? 'bg-primary text-white shadow-lg' 
+                        ${isActive
+                          ? 'bg-primary text-white shadow-lg'
                           : 'text-text-secondary hover:bg-primary/10 hover:text-primary'}
                       `}
                     >
@@ -114,8 +115,8 @@ const Sidebar: React.FC = () => {
                     to={navItem.path!}
                     className={({ isActive }) => `
                       flex items-center px-3 py-2.5 rounded-lg transition-all duration-200
-                      ${isActive 
-                        ? 'bg-primary text-white shadow-lg' 
+                      ${isActive
+                        ? 'bg-primary text-white shadow-lg'
                         : 'text-text-secondary hover:bg-primary/10 hover:text-primary'}
                     `}
                   >
@@ -142,7 +143,7 @@ const Sidebar: React.FC = () => {
             )}
           </div>
           {!isCollapsed && (
-            <button 
+            <button
               onClick={handleLogout}
               className="p-1.5 text-text-muted hover:text-danger hover:bg-danger/10 rounded-lg transition-colors"
             >
@@ -150,8 +151,8 @@ const Sidebar: React.FC = () => {
             </button>
           )}
         </div>
-        
-        <button 
+
+        <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="absolute -right-3 top-[74px] w-6 h-6 bg-white dark:bg-primary border border-border dark:border-primary rounded-full flex items-center justify-center shadow-sm hover:bg-gray-50 transition-colors z-40 text-text-primary dark:text-white"
         >

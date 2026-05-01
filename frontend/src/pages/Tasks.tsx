@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Plus, Search, Filter, Layout, List, MoreVertical, 
+import {
+  Plus, Search, Filter, Layout, List, MoreVertical,
   CheckCircle2, Clock, AlertCircle, Calendar, User, X,
-  Play, Square, Timer as TimerIcon, MessageSquare, 
+  Play, Square, Timer as TimerIcon, MessageSquare,
   ChevronRight, ArrowRight, Save, Link, Trash2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -76,6 +76,16 @@ const Tasks: React.FC = () => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
+
+  // Advanced Filters & Pagination
+  const [showFilters, setShowFilters] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [projectFilter, setProjectFilter] = useState<string>('all');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const tasksPerPage = 10;
+
   useTitle('Tasks');
 
   const [form, setForm] = useState(() => {
@@ -98,11 +108,11 @@ const Tasks: React.FC = () => {
 
   useEffect(() => {
     fetchMetadata();
-    
+
     // Real-time listener for tasks
     const tasksRef = collection(db, 'tasks');
     const q = query(tasksRef, orderBy('created_at', 'desc'));
-    
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const tasksData = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -110,10 +120,10 @@ const Tasks: React.FC = () => {
         due_date: doc.data().due_date?.toDate?.()?.toISOString() || doc.data().due_date,
         active_session_start: doc.data().active_session_start?.toDate?.()?.toISOString() || doc.data().active_session_start,
       })) as any;
-      
+
       setTasks(tasksData);
       setIsLoading(false);
-      
+
       // Update selected task if open
       setSelectedTask(prev => {
         if (!prev) return null;
@@ -160,7 +170,7 @@ const Tasks: React.FC = () => {
           total_minutes_logged: (activeTask.total_minutes_logged || 0) + durationMinutes
         });
         toast('Timer frozen for break', { icon: '❄️' });
-      } 
+      }
       else if (!isPaused && autoPausedTask) {
         // Automatically resume the task when break ends
         const taskRef = doc(db, 'tasks', autoPausedTask.id);
@@ -183,7 +193,7 @@ const Tasks: React.FC = () => {
       // Fetch Projects
       const projSnap = await getDocs(collection(db, 'projects'));
       setProjects(projSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      
+
       // Fetch Employees
       const empSnap = await getDocs(collection(db, 'users'));
       setEmployees(empSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -201,9 +211,9 @@ const Tasks: React.FC = () => {
     try {
       const project = projects.find(p => p.id === form.project_id);
       const assignee = employees.find(emp => emp.id === form.assigned_to);
-      
+
       const isAutoApproved = user?.role === 'admin';
-      
+
       // Generate Task ID: 3 letters of assignee + 3 random numbers
       const targetName = assignee?.name || user?.name || 'SYS';
       const prefix = targetName.slice(0, 3).toUpperCase();
@@ -224,7 +234,7 @@ const Tasks: React.FC = () => {
       };
 
       await addDoc(collection(db, 'tasks'), newTask);
-      
+
       // Broadcast notification
       await addDoc(collection(db, 'notifications'), {
         user_id: 'all',
@@ -268,7 +278,7 @@ const Tasks: React.FC = () => {
     if (!taskToDelete) return;
     try {
       await deleteDoc(doc(db, 'tasks', taskToDelete));
-      
+
       // Log deletion for Admin
       await addDoc(collection(db, 'notifications'), {
         user_id: 'admin',
@@ -294,7 +304,7 @@ const Tasks: React.FC = () => {
       const taskSnap = await getDoc(taskRef);
       const taskData = taskSnap.data();
 
-      await updateDoc(taskRef, { 
+      await updateDoc(taskRef, {
         is_approved: true,
         status: 'todo'
       });
@@ -321,7 +331,7 @@ const Tasks: React.FC = () => {
       const taskSnap = await getDoc(taskRef);
       const taskData = taskSnap.data();
 
-      await updateDoc(taskRef, { 
+      await updateDoc(taskRef, {
         is_approved: false,
         status: 'pending',
         rejection_reason: reason
@@ -370,7 +380,7 @@ const Tasks: React.FC = () => {
         if (data?.active_session_start) {
           const startTime = data.active_session_start.toDate();
           const durationMinutes = Math.floor((new Date().getTime() - startTime.getTime()) / 60000);
-          
+
           // Log the session
           await addDoc(collection(db, 'task_sessions'), {
             task_id: taskId,
@@ -442,18 +452,31 @@ const Tasks: React.FC = () => {
 
   const filteredTasks = tasks.filter(t => {
     const matchesSearch = t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         t.project_name?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+      t.project_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.task_code?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatus = statusFilter === 'all' ? true : t.status === statusFilter;
+    const matchesPriority = priorityFilter === 'all' ? true : t.priority === priorityFilter;
+    const matchesProject = projectFilter === 'all' ? true : t.project_id === projectFilter;
+    const matchesAssignee = assigneeFilter === 'all' ? true : t.assigned_to === assigneeFilter;
+
     // Hide tasks created inside projects from the main Tasks page for everyone (they stay in the Project page)
     if (t.is_project_task) return false;
 
+    const baseMatches = matchesSearch && matchesStatus && matchesPriority && matchesProject && matchesAssignee;
+
     // Admin sees everything, employees only see their assigned tasks
-    if (user?.role === 'admin') return matchesSearch;
-    return matchesSearch && (t.assigned_to === user?.id || t.created_by === user?.id);
+    if (user?.role === 'admin') return baseMatches;
+    return baseMatches && (t.assigned_to === user?.id || t.created_by === user?.id);
   });
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredTasks.length / tasksPerPage);
+  const indexOfLastTask = currentPage * tasksPerPage;
+  const indexOfFirstTask = indexOfLastTask - tasksPerPage;
+  const currentTasks = view === 'list' ? filteredTasks.slice(indexOfFirstTask, indexOfLastTask) : filteredTasks;
+
   const columns = [
-    { id: 'pending', title: 'Pending Approval', icon: AlertCircle, color: 'text-rose-500', zone: 'bg-rose-50/50 dark:bg-rose-900/10' },
     { id: 'todo', title: 'To Do', icon: Clock, color: 'text-gray-400', zone: 'bg-gray-50 dark:bg-white/5' },
     { id: 'in_progress', title: 'In Progress', icon: Play, color: 'text-warning', zone: 'bg-amber-50/30 dark:bg-amber-900/10' },
     { id: 'review', title: 'Review', icon: Search, color: 'text-primary', zone: 'bg-indigo-50/30 dark:bg-indigo-900/10' },
@@ -469,20 +492,20 @@ const Tasks: React.FC = () => {
         </div>
         <div className="flex items-center space-x-3">
           <div className="bg-gray-100 dark:bg-white/5 p-1 rounded-2xl flex items-center shadow-inner">
-            <button 
+            <button
               onClick={() => setView('kanban')}
               className={`p-2.5 rounded-xl transition-all ${view === 'kanban' ? 'bg-white dark:bg-primary shadow-md text-primary dark:text-white scale-105' : 'text-text-muted hover:text-text-secondary'}`}
             >
               <Layout className="w-4 h-4" />
             </button>
-            <button 
+            <button
               onClick={() => setView('list')}
               className={`p-2.5 rounded-xl transition-all ${view === 'list' ? 'bg-white dark:bg-primary shadow-md text-primary dark:text-white scale-105' : 'text-text-muted hover:text-text-secondary'}`}
             >
               <List className="w-4 h-4" />
             </button>
           </div>
-          <button 
+          <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center space-x-3 px-6 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
           >
@@ -492,21 +515,80 @@ const Tasks: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="relative flex-1 max-w-md group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-primary transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Search tasks, projects, or team..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input h-14 pl-12 border-none shadow-sm focus:ring-4 focus:ring-primary/10 transition-all font-medium"
-          />
+      <div className="flex flex-col space-y-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1 max-w-md group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-primary transition-colors" />
+            <input
+              type="text"
+              placeholder="Search tasks, projects, or team..."
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              className="input h-14 pl-12 border-none shadow-sm focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+            />
+          </div>
+          <button 
+            onClick={() => setShowFilters(!showFilters)}
+            className={`h-14 px-6 rounded-2xl glass flex items-center text-sm font-bold border-none transition-all shadow-sm ${showFilters ? 'bg-primary text-white shadow-primary/20' : 'text-text-secondary hover:bg-white/80'}`}
+          >
+            <Filter className="w-4 h-4 mr-3" />
+            Advanced Filters
+          </button>
         </div>
-        <button className="h-14 px-6 rounded-2xl glass flex items-center text-sm font-bold text-text-secondary border-none hover:bg-white/80 transition-all shadow-sm">
-          <Filter className="w-4 h-4 mr-3" />
-          Advanced Filters
-        </button>
+
+        {showFilters && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 bg-white dark:bg-glass rounded-[32px] shadow-sm border border-gray-100 dark:border-white/10 animate-in slide-in-from-top-4 duration-300">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Status</label>
+              <select 
+                value={statusFilter} 
+                onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold border-none outline-none focus:ring-2 focus:ring-primary/20 appearance-none dark:text-white"
+              >
+                <option value="all">All Statuses</option>
+                <option value="todo">To Do</option>
+                <option value="in_progress">In Progress</option>
+                <option value="review">Review</option>
+                <option value="done">Done</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Priority</label>
+              <select 
+                value={priorityFilter} 
+                onChange={e => { setPriorityFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold border-none outline-none focus:ring-2 focus:ring-primary/20 appearance-none dark:text-white"
+              >
+                <option value="all">All Priorities</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Project</label>
+              <select 
+                value={projectFilter} 
+                onChange={e => { setProjectFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold border-none outline-none focus:ring-2 focus:ring-primary/20 appearance-none dark:text-white"
+              >
+                <option value="all">All Projects</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Assignee</label>
+              <select 
+                value={assigneeFilter} 
+                onChange={e => { setAssigneeFilter(e.target.value); setCurrentPage(1); }}
+                className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold border-none outline-none focus:ring-2 focus:ring-primary/20 appearance-none dark:text-white"
+              >
+                <option value="all">All Members</option>
+                {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {isLoading ? (
@@ -526,11 +608,11 @@ const Tasks: React.FC = () => {
                   {filteredTasks.filter(t => t.status === col.id).length}
                 </span>
               </div>
-              
+
               <div className="space-y-5 px-2 pb-6">
                 {filteredTasks.filter(t => t.status === col.id).map(task => (
-                  <div 
-                    key={task.id} 
+                  <div
+                    key={task.id}
                     onClick={() => setSelectedTask(task)}
                     className={`group bg-white dark:bg-glass p-6 rounded-[32px] shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all cursor-pointer border-2 ${task.active_session_id ? 'border-primary/40 ring-4 ring-primary/5' : 'border-transparent hover:border-primary/10'}`}
                   >
@@ -549,9 +631,9 @@ const Tasks: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         <PriorityBadge priority={task.priority} />
                         <div className="relative">
-                          <button 
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setOpenMenuId(openMenuId === task.id ? null : task.id);
                             }}
                             className={`p-1.5 rounded-lg text-text-muted transition-all ${openMenuId === task.id ? 'bg-gray-100 text-primary' : 'hover:bg-gray-100'}`}
@@ -560,22 +642,22 @@ const Tasks: React.FC = () => {
                           </button>
                           {openMenuId === task.id && (
                             <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-glass rounded-xl shadow-xl border border-gray-100 dark:border-white/10 py-1 z-[100] animate-in fade-in zoom-in duration-150">
-                              <button 
-                                onClick={(e) => { 
-                                  e.stopPropagation(); 
-                                  setSelectedTask(task); 
-                                  setShowEditModal(true); 
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedTask(task);
+                                  setShowEditModal(true);
                                   setOpenMenuId(null);
                                 }}
                                 className="w-full text-left px-4 py-2 text-xs font-bold text-text-secondary hover:bg-primary/5 hover:text-primary transition-all"
                               >
                                 Edit Task
                               </button>
-                              <button 
-                                onClick={(e) => { 
-                                  e.stopPropagation(); 
-                                  setTaskToDelete(task.id); 
-                                  setShowDeleteModal(true); 
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTaskToDelete(task.id);
+                                  setShowDeleteModal(true);
                                   setOpenMenuId(null);
                                 }}
                                 className="w-full text-left px-4 py-2 text-xs font-bold text-danger hover:bg-danger/5 transition-all"
@@ -609,8 +691,8 @@ const Tasks: React.FC = () => {
                               ✓ Approve
                             </button>
                             <button
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 const reason = prompt('Reason for rejection:');
                                 if (reason) rejectTask(task.id, reason);
                               }}
@@ -637,13 +719,12 @@ const Tasks: React.FC = () => {
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleTimer(task.id, !!task.active_session_id); }}
                           disabled={!task.is_approved}
-                          className={`p-2.5 rounded-xl transition-all ${
-                            !task.is_approved 
+                          className={`p-2.5 rounded-xl transition-all ${!task.is_approved
                               ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
-                              : task.active_session_id 
-                                ? 'bg-danger text-white animate-pulse' 
+                              : task.active_session_id
+                                ? 'bg-danger text-white animate-pulse'
                                 : 'bg-gray-50 text-gray-400 group-hover:bg-primary/10 group-hover:text-primary'
-                          }`}
+                            }`}
                         >
                           {task.active_session_id ? <TimerIcon className="w-4 h-4 animate-spin-slow" /> : <Play className="w-4 h-4 fill-current" />}
                         </button>
@@ -664,8 +745,9 @@ const Tasks: React.FC = () => {
             </div>
           ))}
         </div>
-       ) : (
-        <div className="glass rounded-[40px] border-none shadow-sm bg-white/40 dark:bg-white/5">
+      ) : (
+        <>
+          <div className="glass rounded-[40px] border-none shadow-sm bg-white/40 dark:bg-white/5">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-white/20 text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
@@ -678,9 +760,9 @@ const Tasks: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredTasks.map(task => (
-                <tr 
-                  key={task.id} 
+              {currentTasks.map(task => (
+                <tr
+                  key={task.id}
                   onClick={() => setSelectedTask(task)}
                   className={`border-b border-white/10 hover:bg-white/60 transition-all cursor-pointer group ${task.active_session_id ? 'bg-primary/5' : ''}`}
                 >
@@ -714,7 +796,7 @@ const Tasks: React.FC = () => {
                       <div className="flex flex-col items-center">
                         <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-lg uppercase tracking-tighter">Awaiting Approval</span>
                         {user?.role === 'admin' && (
-                          <button 
+                          <button
                             onClick={(e) => { e.stopPropagation(); approveTask(task.id); }}
                             className="mt-2 text-[10px] font-black text-success hover:underline"
                           >
@@ -723,13 +805,12 @@ const Tasks: React.FC = () => {
                         )}
                       </div>
                     ) : (
-                      <button 
+                      <button
                         onClick={(e) => { e.stopPropagation(); toggleTimer(task.id, !!task.active_session_id); }}
-                        className={`p-3 rounded-xl transition-all shadow-sm ${
-                          task.active_session_id 
-                          ? 'bg-danger text-white hover:bg-danger-hover' 
-                          : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'
-                        }`}
+                        className={`p-3 rounded-xl transition-all shadow-sm ${task.active_session_id
+                            ? 'bg-danger text-white hover:bg-danger-hover'
+                            : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'
+                          }`}
                       >
                         {task.active_session_id ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
                       </button>
@@ -737,9 +818,9 @@ const Tasks: React.FC = () => {
                   </td>
                   <td className="px-8 py-6 text-right">
                     <div className="relative inline-block text-left">
-                      <button 
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setOpenMenuId(openMenuId === task.id ? null : task.id);
                         }}
                         className={`p-2 rounded-lg text-text-muted transition-all ${openMenuId === task.id ? 'bg-gray-100 text-primary' : 'hover:bg-gray-100'}`}
@@ -748,11 +829,11 @@ const Tasks: React.FC = () => {
                       </button>
                       {openMenuId === task.id && (
                         <div className="absolute right-full mr-2 top-0 w-48 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-gray-100 py-2 z-[100] animate-in slide-in-from-right-2 fade-in duration-200">
-                          <button 
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              setSelectedTask(task); 
-                              setShowEditModal(true); 
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedTask(task);
+                              setShowEditModal(true);
                               setOpenMenuId(null);
                             }}
                             className="w-full text-left px-5 py-3 text-sm font-bold text-text-secondary hover:bg-primary/5 hover:text-primary transition-all flex items-center"
@@ -760,11 +841,11 @@ const Tasks: React.FC = () => {
                             <Layout className="w-4 h-4 mr-3" />
                             Edit Task
                           </button>
-                          <button 
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              setTaskToDelete(task.id); 
-                              setShowDeleteModal(true); 
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTaskToDelete(task.id);
+                              setShowDeleteModal(true);
                               setOpenMenuId(null);
                             }}
                             className="w-full text-left px-5 py-3 text-sm font-bold text-danger hover:bg-danger/5 transition-all flex items-center"
@@ -779,8 +860,45 @@ const Tasks: React.FC = () => {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
+
+          {/* Pagination Controls */}
+          {view === 'list' && totalPages > 1 && (
+        <div className="flex items-center justify-between px-8 py-6 bg-white dark:bg-glass rounded-[32px] shadow-sm border border-gray-100 dark:border-white/10 mt-6">
+          <p className="text-xs font-black text-text-muted uppercase tracking-widest">
+            Showing <span className="text-primary">{indexOfFirstTask + 1}</span> to <span className="text-primary">{Math.min(indexOfLastTask, filteredTasks.length)}</span> of <span className="text-primary">{filteredTasks.length}</span> tasks
+          </p>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/5 text-text-muted hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >
+              <ChevronRight className="w-5 h-5 rotate-180" />
+            </button>
+            <div className="flex items-center space-x-1">
+              {[...Array(totalPages)].map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentPage(i + 1)}
+                  className={`w-10 h-10 rounded-xl text-xs font-black transition-all ${currentPage === i + 1 ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-gray-50 dark:bg-white/5 text-text-muted hover:bg-gray-100'}`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/5 text-text-muted hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
         </div>
+      )}
+        </>
       )}
 
       {selectedTask && (
@@ -814,7 +932,7 @@ const Tasks: React.FC = () => {
               <div className="grid grid-cols-2 gap-12 py-8 border-y border-gray-100 dark:border-white/5">
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest">Zone Status</label>
-                  <select 
+                  <select
                     value={selectedTask.status}
                     onChange={(e) => updateStatus(selectedTask.id, e.target.value)}
                     className="w-full h-14 px-5 bg-gray-50 dark:bg-white/5 rounded-2xl font-black text-xs uppercase tracking-widest outline-none ring-primary/10 focus:ring-4 transition-all appearance-none cursor-pointer border-none text-text-primary"
@@ -864,13 +982,12 @@ const Tasks: React.FC = () => {
               </div>
 
               <div className="pt-8">
-                <button 
+                <button
                   onClick={() => toggleTimer(selectedTask.id, !!selectedTask.active_session_id)}
-                  className={`w-full h-16 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center space-x-4 shadow-xl transition-all active:scale-95 ${
-                    selectedTask.active_session_id 
-                    ? 'bg-danger text-white shadow-danger/25' 
-                    : 'bg-primary text-white shadow-primary/25'
-                  }`}
+                  className={`w-full h-16 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center space-x-4 shadow-xl transition-all active:scale-95 ${selectedTask.active_session_id
+                      ? 'bg-danger text-white shadow-danger/25'
+                      : 'bg-primary text-white shadow-primary/25'
+                    }`}
                 >
                   {selectedTask.active_session_id ? (
                     <>
@@ -900,24 +1017,24 @@ const Tasks: React.FC = () => {
               </div>
               <button onClick={() => setShowCreateModal(false)} className="w-10 h-10 flex items-center justify-center bg-white dark:bg-white/10 rounded-xl shadow-sm hover:text-danger transition-colors text-text-primary"><X className="w-5 h-5" /></button>
             </div>
-            
+
             <div className="overflow-y-auto flex-1">
               <form onSubmit={handleCreate} className="p-10 space-y-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Mission Title</label>
-                  <input 
-                    type="text" required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold" 
+                  <input
+                    type="text" required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold"
                     placeholder="e.g. Design System Implementation"
-                    value={form.title} onChange={e => setForm({...form, title: e.target.value})}
+                    value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Project</label>
-                    <select 
+                    <select
                       required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
-                      value={form.project_id} onChange={e => setForm({...form, project_id: e.target.value})}
+                      value={form.project_id} onChange={e => setForm({ ...form, project_id: e.target.value })}
                     >
                       <option value="" className="dark:bg-slate-800">Select Project</option>
                       {projects.map(p => <option key={p.id} value={p.id} className="dark:bg-slate-800">{p.name}</option>)}
@@ -925,10 +1042,10 @@ const Tasks: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Est. Hours</label>
-                    <input 
-                      type="number" step="0.5" required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold dark:text-white" 
+                    <input
+                      type="number" step="0.5" required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold dark:text-white"
                       placeholder="e.g. 4.5"
-                      value={form.estimated_hours} onChange={e => setForm({...form, estimated_hours: parseFloat(e.target.value)})}
+                      value={form.estimated_hours} onChange={e => setForm({ ...form, estimated_hours: parseFloat(e.target.value) })}
                     />
                   </div>
                 </div>
@@ -936,9 +1053,9 @@ const Tasks: React.FC = () => {
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Lead Assigned</label>
-                    <select 
+                    <select
                       required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
-                      value={form.assigned_to} onChange={e => setForm({...form, assigned_to: e.target.value})}
+                      value={form.assigned_to} onChange={e => setForm({ ...form, assigned_to: e.target.value })}
                     >
                       <option value="" className="dark:bg-slate-800">Select Team Member</option>
                       {employees.map(e => <option key={e.id} value={e.id} className="dark:bg-slate-800">{e.name}</option>)}
@@ -946,9 +1063,9 @@ const Tasks: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Priority</label>
-                    <select 
+                    <select
                       className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
-                      value={form.priority} onChange={e => setForm({...form, priority: e.target.value})}
+                      value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
                     >
                       <option value="low" className="dark:bg-slate-800">Low Priority</option>
                       <option value="medium" className="dark:bg-slate-800">Medium Priority</option>
@@ -960,25 +1077,25 @@ const Tasks: React.FC = () => {
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Deadline</label>
-                    <input 
+                    <input
                       type="date" required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold"
-                      value={form.due_date} onChange={e => setForm({...form, due_date: e.target.value})}
+                      value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })}
                     />
                   </div>
                   <div className="flex items-end pb-1">
-                     <div className="flex items-center space-x-2 text-[10px] font-black text-success uppercase tracking-widest bg-success/5 px-4 py-3 rounded-xl w-full">
-                       <Save className="w-3 h-3" />
-                       <span>Draft Auto-saved</span>
-                     </div>
+                    <div className="flex items-center space-x-2 text-[10px] font-black text-success uppercase tracking-widest bg-success/5 px-4 py-3 rounded-xl w-full">
+                      <Save className="w-3 h-3" />
+                      <span>Draft Auto-saved</span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Mission Briefing</label>
-                  <textarea 
-                    className="input min-h-[100px] p-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-medium leading-relaxed" 
+                  <textarea
+                    className="input min-h-[100px] p-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-medium leading-relaxed"
                     placeholder="Define the objectives and requirements..."
-                    value={form.description} onChange={e => setForm({...form, description: e.target.value})}
+                    value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
                   />
                 </div>
 
@@ -1001,19 +1118,19 @@ const Tasks: React.FC = () => {
             <form onSubmit={handleUpdateTask} className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Task Title</label>
-                <input 
+                <input
                   type="text" required
                   className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all"
                   value={selectedTask.title}
-                  onChange={(e) => setSelectedTask({...selectedTask, title: e.target.value})}
+                  onChange={(e) => setSelectedTask({ ...selectedTask, title: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Description</label>
-                <textarea 
+                <textarea
                   className="w-full h-32 px-6 py-4 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all resize-none"
                   value={selectedTask.description}
-                  onChange={(e) => setSelectedTask({...selectedTask, description: e.target.value})}
+                  onChange={(e) => setSelectedTask({ ...selectedTask, description: e.target.value })}
                 />
               </div>
               <div className="flex gap-4 pt-4">

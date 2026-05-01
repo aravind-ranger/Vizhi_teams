@@ -448,8 +448,8 @@ const Dashboard: React.FC = () => {
                       )}
                     </div>
                     <div className="text-center md:text-right">
-                      <p className="text-[10px] text-text-muted uppercase font-black tracking-widest mb-2">Target Finish</p>
-                      <p className="text-3xl font-black">{safeFormat(attendance.scheduled_checkout, 'HH:mm a')}</p>
+                      <p className="text-[10px] text-text-muted uppercase font-black tracking-widest mb-2">Expected Completion</p>
+                      <p className="text-3xl font-black">{timeLeft !== null ? format(new Date(Date.now() + timeLeft * 1000), 'HH:mm a') : safeFormat(attendance.scheduled_checkout, 'HH:mm a')}</p>
                     </div>
                   </div>
 

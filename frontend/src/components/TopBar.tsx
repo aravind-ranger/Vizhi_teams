@@ -53,8 +53,9 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
       // Shift end notification (8 hours)
       if (attendance?.check_in && !attendance.check_out && !hasNotifiedShiftEnd) {
         const checkInTime = new Date(attendance.check_in);
-        const diffHours = (now.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
-        if (diffHours >= 7.75 && diffHours < 8) { // 15 mins before
+        const breakSeconds = (attendance.total_break_ms || 0) / 1000;
+        const diffHours = (now.getTime() - checkInTime.getTime() - (breakSeconds * 1000)) / (1000 * 60 * 60);
+        if (diffHours >= 7.75 && diffHours < 8 && !hasNotifiedShiftEnd) { // 15 mins before
            toast('Your shift is ending in 15 minutes!', { icon: '⏰' });
            setHasNotifiedShiftEnd(true);
         }
@@ -232,21 +233,26 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
               </div>
             )}
 
-            {/* Overtime Button - Enabled after 8 hours or if checked out */}
-            {attendance?.check_in && !attendance.is_overtime && (
-              <button 
-                onClick={startOvertime}
-                disabled={(() => {
-                  const checkInTime = new Date(attendance.check_in);
-                  const diffHours = (new Date().getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
-                  return diffHours < 8 && !attendance.check_out;
-                })()}
-                className={`flex items-center px-4 py-2 text-white text-xs font-bold rounded-lg shadow-sm hover:scale-105 active:scale-95 transition-all disabled:opacity-30 disabled:grayscale disabled:scale-100 ${attendance.check_out ? 'bg-indigo-600' : 'bg-amber-500'}`}
-              >
-                <ClockIcon className="w-3 h-3 mr-2" />
-                {attendance.check_out ? 'Extra Overtime' : 'Start Overtime'}
-              </button>
-            )}
+            {/* Overtime Button - Enabled after 8 hours */}
+            {attendance?.check_in && !attendance.is_overtime && (() => {
+              const checkInTime = new Date(attendance.check_in);
+              const endTime = attendance.check_out ? new Date(attendance.check_out) : new Date();
+              const breakSeconds = (attendance.total_break_ms || 0) / 1000;
+              const diffHours = (endTime.getTime() - checkInTime.getTime() - (breakSeconds * 1000)) / (1000 * 60 * 60);
+              
+              if (diffHours >= 8) {
+                return (
+                  <button 
+                    onClick={startOvertime}
+                    className={`flex items-center px-4 py-2 text-white text-xs font-bold rounded-lg shadow-sm hover:scale-105 active:scale-95 transition-all ${attendance.check_out ? 'bg-indigo-600' : 'bg-amber-500'}`}
+                  >
+                    <ClockIcon className="w-3 h-3 mr-2" />
+                    {attendance.check_out ? 'Extra Overtime' : 'Start Overtime'}
+                  </button>
+                );
+              }
+              return null;
+            })()}
 
             {/* End Overtime Button */}
             {attendance?.is_overtime && (
@@ -348,9 +354,23 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
                               Join Meeting
                             </button>
                             <button 
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
-                                updateDoc(doc(db, 'notifications', n.id), { is_read: true });
+                                try {
+                                  await updateDoc(doc(db, 'notifications', n.id), { is_read: true });
+                                  if (n.host_id) {
+                                    await addDoc(collection(db, 'notifications'), {
+                                      user_id: n.host_id,
+                                      title: 'Meeting Declined',
+                                      message: `${user?.name} has declined to join the meeting.`,
+                                      type: 'system',
+                                      is_read: false,
+                                      created_at: serverTimestamp()
+                                    });
+                                  }
+                                } catch (err) {
+                                  console.error('Failed to decline meeting', err);
+                                }
                               }}
                               className="flex-1 py-2 bg-gray-100 text-text-muted text-[10px] font-black rounded-lg uppercase tracking-widest hover:bg-gray-200 transition-all"
                             >
