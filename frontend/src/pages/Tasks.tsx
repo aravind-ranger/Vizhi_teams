@@ -51,6 +51,11 @@ const LiveTimer: React.FC<{ start: string; baseMinutes: number }> = ({ start, ba
   }, [start]);
 
   const totalSeconds = ((baseMinutes || 0) * 60) + (elapsed || 0);
+  
+  if (isNaN(totalSeconds)) {
+    return <span className="font-mono text-primary tabular-nums">0m 0s</span>;
+  }
+
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
@@ -440,26 +445,36 @@ const Tasks: React.FC = () => {
       
       const updateData: any = { status: newStatus };
       
-      // If moving to 'done', and timer is running, stop it automatically
-      if (newStatus === 'done' && taskData?.active_session_id === 'active' && taskData.active_session_start) {
-        const startTime = new Date(taskData.active_session_start).getTime();
-        const durationMinutes = Math.floor((new Date().getTime() - startTime) / 60000);
+      // If moving to 'done', handle timer stopping and display total time
+      if (newStatus === 'done') {
+        let totalMins = taskData?.total_minutes_logged || 0;
 
-        // Log the session
-        await addDoc(collection(db, 'task_sessions'), {
-          task_id: taskId,
-          user_id: taskData.assigned_to || user?.id,
-          start_time: taskData.active_session_start,
-          end_time: serverTimestamp(),
-          duration_minutes: durationMinutes,
-          project_id: taskData.project_id
+        if (taskData?.active_session_id === 'active' && taskData.active_session_start) {
+          const startTime = new Date(taskData.active_session_start).getTime();
+          const durationMinutes = Math.floor((new Date().getTime() - startTime) / 60000);
+
+          // Log the session
+          await addDoc(collection(db, 'task_sessions'), {
+            task_id: taskId,
+            user_id: taskData.assigned_to || user?.id,
+            start_time: taskData.active_session_start,
+            end_time: serverTimestamp(),
+            duration_minutes: durationMinutes,
+            project_id: taskData.project_id
+          });
+
+          totalMins += durationMinutes;
+          updateData.active_session_id = null;
+          updateData.active_session_start = null;
+          updateData.total_minutes_logged = totalMins;
+        }
+
+        toast.success(`Mission Accomplished! Total Tracked: ${formatMinutes(totalMins)}`, {
+          icon: '🎯',
+          duration: 5000
         });
-
-        updateData.active_session_id = null;
-        updateData.active_session_start = null;
-        updateData.total_minutes_logged = (taskData.total_minutes_logged || 0) + durationMinutes;
-        
-        toast('Task completed & timer stopped', { icon: '✅' });
+      } else {
+        toast.success(`Task moved to ${newStatus.replace('_', ' ')}`);
       }
 
       await updateDoc(taskRef, updateData);
@@ -468,8 +483,6 @@ const Tasks: React.FC = () => {
       if (selectedTask?.id === taskId) {
         setSelectedTask({ ...selectedTask, ...updateData });
       }
-      
-      toast.success(`Task moved to ${newStatus.replace('_', ' ')}`);
     } catch (err) {
       console.error(err);
       toast.error('Failed to update task status');
@@ -477,6 +490,7 @@ const Tasks: React.FC = () => {
   };
 
   const formatMinutes = (mins: number) => {
+    if (isNaN(mins) || mins === undefined || mins === null) return '0m';
     const h = Math.floor(mins / 60);
     const m = Math.round(mins % 60);
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
@@ -971,12 +985,12 @@ const Tasks: React.FC = () => {
                   <select
                     value={selectedTask.status}
                     onChange={(e) => updateStatus(selectedTask.id, e.target.value)}
-                    className="w-full h-14 px-5 bg-gray-50 dark:bg-white/5 rounded-2xl font-black text-xs uppercase tracking-widest outline-none ring-primary/10 focus:ring-4 transition-all appearance-none cursor-pointer border-none text-text-primary"
+                    className="w-full h-14 px-5 bg-gray-50 dark:bg-white/5 rounded-2xl font-black text-xs uppercase tracking-widest outline-none ring-primary/10 focus:ring-4 transition-all appearance-none cursor-pointer border-none text-text-primary dark:text-white"
                   >
-                    <option value="todo">To Do</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="review">Review</option>
-                    <option value="done">Done</option>
+                    <option value="todo" className="dark:bg-slate-900">To Do</option>
+                    <option value="in_progress" className="dark:bg-slate-900">In Progress</option>
+                    <option value="review" className="dark:bg-slate-900">Review</option>
+                    <option value="done" className="dark:bg-slate-900">Done</option>
                   </select>
                 </div>
                 <div className="space-y-3">
@@ -990,7 +1004,7 @@ const Tasks: React.FC = () => {
 
               <div className="space-y-6">
                 <h3 className="text-xs font-black text-text-muted uppercase tracking-widest">Mission Description</h3>
-                <div className="bg-gray-50 p-8 rounded-[32px] text-text-secondary leading-relaxed font-medium whitespace-pre-wrap">
+                <div className="bg-gray-50 dark:bg-white/5 p-8 rounded-[32px] text-text-secondary dark:text-white/60 leading-relaxed font-medium whitespace-pre-wrap">
                   {selectedTask.description || 'No description provided for this mission.'}
                 </div>
               </div>
@@ -1005,15 +1019,15 @@ const Tasks: React.FC = () => {
                     ) : formatMinutes(selectedTask.total_minutes_logged)}
                   </p>
                 </div>
-                <div className="p-6 bg-indigo-50 rounded-[24px] space-y-2">
-                  <TimerIcon className="w-5 h-5 text-indigo-600 mb-3" />
+                <div className="p-6 bg-indigo-50 dark:bg-indigo-900/20 rounded-[24px] space-y-2">
+                  <TimerIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mb-3" />
                   <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Estimation</p>
-                  <p className="text-xl font-black text-indigo-600">{selectedTask.estimated_hours}h</p>
+                  <p className="text-xl font-black text-indigo-600 dark:text-indigo-300">{selectedTask.estimated_hours}h</p>
                 </div>
-                <div className="p-6 bg-emerald-50 rounded-[24px] space-y-2">
-                  <Calendar className="w-5 h-5 text-emerald-600 mb-3" />
+                <div className="p-6 bg-emerald-50 dark:bg-emerald-900/20 rounded-[24px] space-y-2">
+                  <Calendar className="w-5 h-5 text-emerald-600 dark:text-emerald-400 mb-3" />
                   <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Due Date</p>
-                  <p className="text-xl font-black text-emerald-600">{new Date(selectedTask.due_date).toLocaleDateString()}</p>
+                  <p className="text-xl font-black text-emerald-600 dark:text-emerald-300">{new Date(selectedTask.due_date).toLocaleDateString()}</p>
                 </div>
               </div>
 
