@@ -335,6 +335,7 @@ const Leaves: React.FC = () => {
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">From Date</label>
                   <input 
                     type="date" required className="input h-14 px-5 rounded-2xl border-none font-bold"
+                    min={new Date().toISOString().split('T')[0]}
                     value={form.from_date} onChange={e => setForm({...form, from_date: e.target.value})}
                   />
                 </div>
@@ -342,6 +343,7 @@ const Leaves: React.FC = () => {
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">To Date</label>
                   <input 
                     type="date" required className="input h-14 px-5 rounded-2xl border-none font-bold"
+                    min={form.from_date || new Date().toISOString().split('T')[0]}
                     value={form.to_date} onChange={e => setForm({...form, to_date: e.target.value})}
                   />
                 </div>

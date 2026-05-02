@@ -214,18 +214,13 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
                     toast.error('Please resume work before checking out');
                     return;
                   }
-                  if (isCheckoutConfirmed) {
-                    checkOut();
-                    setIsCheckoutConfirmed(false);
-                  } else {
-                    setShowCheckoutModal(true);
-                  }
+                  setShowCheckoutModal(true);
                 }}
                 disabled={attendance.is_paused}
-                className={`flex items-center px-4 py-2 text-xs font-bold rounded-lg transition-all ${attendance.is_paused ? 'opacity-50 grayscale cursor-not-allowed' : ''} ${isCheckoutConfirmed ? 'bg-danger text-white scale-105 shadow-lg' : 'bg-danger/10 text-danger hover:bg-danger hover:text-white'}`}
+                className={`flex items-center px-4 py-2 text-xs font-bold rounded-lg transition-all ${attendance.is_paused ? 'opacity-50 grayscale cursor-not-allowed' : ''} bg-danger/10 text-danger hover:bg-danger hover:text-white`}
               >
                 <ClockIcon className="w-3 h-3 mr-2" />
-                {isCheckoutConfirmed ? 'Confirm Check Out' : 'Check Out'}
+                Check Out
               </button>
             ) : (
               <div className="px-4 py-2 text-[10px] font-bold text-success uppercase tracking-wider">
@@ -535,22 +530,20 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
               <AlertTriangle className="w-10 h-10 text-danger" />
             </div>
             <h3 className="text-2xl font-black text-text-primary mb-3">Finish for today?</h3>
-            <p className="text-text-muted mb-8 font-medium">Are you sure you want to check out? You will need to press the button again to confirm.</p>
+            <p className="text-text-muted mb-8 font-medium">Are you sure you want to check out? All active task timers will be stopped.</p>
             
             <div className="flex flex-col space-y-3">
               <button
                 onClick={() => {
-                  setIsCheckoutConfirmed(true);
+                  checkOut();
                   setShowCheckoutModal(false);
-                  toast.success('Confirmed. Press the checkout button once more to finish.');
                 }}
                 className="w-full h-14 bg-danger text-white font-black rounded-2xl shadow-xl shadow-danger/20 hover:scale-[1.02] active:scale-95 transition-all"
               >
-                Yes, I'm sure
+                Yes, Check Out Now
               </button>
               <button
                 onClick={() => {
-                  setIsCheckoutConfirmed(false);
                   setShowCheckoutModal(false);
                 }}
                 className="w-full h-14 text-text-muted font-black uppercase tracking-widest hover:text-text-primary transition-colors"

@@ -378,8 +378,8 @@ const Tasks: React.FC = () => {
       if (isActive) {
         // Stop timer
         if (data?.active_session_start) {
-          const startTime = data.active_session_start.toDate();
-          const durationMinutes = Math.floor((new Date().getTime() - startTime.getTime()) / 60000);
+          const startTime = new Date(data.active_session_start).getTime();
+          const durationMinutes = Math.floor((new Date().getTime() - startTime) / 60000);
 
           // Log the session
           await addDoc(collection(db, 'task_sessions'), {
@@ -436,7 +436,39 @@ const Tasks: React.FC = () => {
   const updateStatus = async (taskId: string, newStatus: string) => {
     try {
       const taskRef = doc(db, 'tasks', taskId);
-      await updateDoc(taskRef, { status: newStatus });
+      const taskData = tasks.find(t => t.id === taskId);
+      
+      const updateData: any = { status: newStatus };
+      
+      // If moving to 'done', and timer is running, stop it automatically
+      if (newStatus === 'done' && taskData?.active_session_id === 'active' && taskData.active_session_start) {
+        const startTime = new Date(taskData.active_session_start).getTime();
+        const durationMinutes = Math.floor((new Date().getTime() - startTime) / 60000);
+
+        // Log the session
+        await addDoc(collection(db, 'task_sessions'), {
+          task_id: taskId,
+          user_id: taskData.assigned_to || user?.id,
+          start_time: taskData.active_session_start,
+          end_time: serverTimestamp(),
+          duration_minutes: durationMinutes,
+          project_id: taskData.project_id
+        });
+
+        updateData.active_session_id = null;
+        updateData.active_session_start = null;
+        updateData.total_minutes_logged = (taskData.total_minutes_logged || 0) + durationMinutes;
+        
+        toast('Task completed & timer stopped', { icon: '✅' });
+      }
+
+      await updateDoc(taskRef, updateData);
+      
+      // Update local state immediately to prevent UI flicker
+      if (selectedTask?.id === taskId) {
+        setSelectedTask({ ...selectedTask, ...updateData });
+      }
+      
       toast.success(`Task moved to ${newStatus.replace('_', ' ')}`);
     } catch (err) {
       console.error(err);
@@ -451,9 +483,13 @@ const Tasks: React.FC = () => {
   };
 
   const filteredTasks = tasks.filter(t => {
-    const matchesSearch = t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.project_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.task_code?.toLowerCase().includes(searchTerm.toLowerCase());
+    const title = t.title || '';
+    const projectName = t.project_name || '';
+    const taskCode = t.task_code || '';
+    
+    const matchesSearch = title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      taskCode.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'all' ? true : t.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' ? true : t.priority === priorityFilter;
@@ -1043,9 +1079,12 @@ const Tasks: React.FC = () => {
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Est. Hours</label>
                     <input
-                      type="number" step="0.5" required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold dark:text-white"
+                      type="number" step="0.5" min="0" required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold dark:text-white"
                       placeholder="e.g. 4.5"
-                      value={form.estimated_hours} onChange={e => setForm({ ...form, estimated_hours: parseFloat(e.target.value) })}
+                      value={form.estimated_hours} onChange={e => {
+                        const val = parseFloat(e.target.value);
+                        setForm({ ...form, estimated_hours: isNaN(val) ? 0 : Math.max(0, val) });
+                      }}
                     />
                   </div>
                 </div>

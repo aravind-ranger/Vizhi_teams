@@ -67,11 +67,38 @@ export const useAttendance = () => {
   };
 
   const checkOut = async () => {
-    if (!attendance?.id) return;
+    if (!attendance?.id || !user?.id) return;
     try {
       const now = new Date();
       const checkInTime = new Date(attendance.check_in!);
       
+      // Stop all active tasks
+      const tasksRef = collection(db, 'tasks');
+      const qTasks = query(tasksRef, where('active_session_id', '==', 'active'), where('assigned_to', '==', user.id));
+      const activeTasks = await getDocs(qTasks);
+      
+      for (const taskDoc of activeTasks.docs) {
+        const taskData = taskDoc.data();
+        const startTime = new Date(taskData.active_session_start.toDate ? taskData.active_session_start.toDate() : taskData.active_session_start).getTime();
+        const durationMinutes = Math.floor((now.getTime() - startTime) / 60000);
+
+        await addDoc(collection(db, 'task_sessions'), {
+          task_id: taskDoc.id,
+          user_id: user.id,
+          start_time: taskData.active_session_start,
+          end_time: serverTimestamp(),
+          duration_minutes: durationMinutes,
+          type: 'checkout_auto_pause'
+        });
+
+        await updateDoc(doc(db, 'tasks', taskDoc.id), {
+          active_session_id: null,
+          active_session_start: null,
+          is_paused_by_checkout: true, // Specific flag for checkout
+          total_minutes_logged: (taskData.total_minutes_logged || 0) + durationMinutes
+        });
+      }
+
       // Calculate active duration (Total time - Break time)
       const totalDurationMs = now.getTime() - checkInTime.getTime();
       const breakMs = attendance.total_break_ms || 0;
@@ -87,7 +114,9 @@ export const useAttendance = () => {
         duration_minutes: workMinutes,
         early_exit: isEarly,
         status: 'completed',
-        is_overtime: false // Ensure OT is cleared on final checkout
+        is_overtime: false,
+        is_paused: false,
+        pause_start: null
       };
 
       await updateDoc(doc(db, 'attendance', attendance.id), updateData);
@@ -287,6 +316,20 @@ export const useAttendance = () => {
       };
 
       await updateDoc(doc(db, 'attendance', attendance.id), updateData);
+
+      // Resume tasks paused by checkout
+      const tasksRef = collection(db, 'tasks');
+      const q = query(tasksRef, where('is_paused_by_checkout', '==', true), where('assigned_to', '==', user.id));
+      const pausedTasks = await getDocs(q);
+
+      for (const taskDoc of pausedTasks.docs) {
+        await updateDoc(doc(db, 'tasks', taskDoc.id), {
+          active_session_id: 'active',
+          active_session_start: serverTimestamp(),
+          is_paused_by_checkout: false
+        });
+      }
+
       setAttendance({ ...attendance, ...updateData });
 
       // Notifications
