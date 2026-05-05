@@ -16,7 +16,7 @@ interface Project {
   id: string;
   name: string;
   description: string;
-  status: 'active' | 'completed' | 'on_hold';
+  status: 'todo' | 'active' | 'on_hold' | 'drop' | 'completed';
   creator_name: string;
   total_tasks: number;
   completed_tasks: number;
@@ -39,12 +39,16 @@ const Projects: React.FC = () => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [employees, setEmployees] = useState<any[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
-  const [newProject, setNewProject] = useState({
+  const [newProject, setNewProject] = useState<{
+    name: string;
+    description: string;
+    deadline: string;
+    status: Project['status'];
+  }>({
     name: '',
     description: '',
-    client: '',
     deadline: '',
-    status: 'active' as const
+    status: 'todo'
   });
   const navigate = useNavigate();
   useTitle('Projects');
@@ -102,6 +106,7 @@ const Projects: React.FC = () => {
     try {
       await addDoc(collection(db, 'projects'), {
         ...newProject,
+        end_date: newProject.deadline,
         members: selectedMembers,
         total_tasks: 0,
         completed_tasks: 0,
@@ -110,7 +115,7 @@ const Projects: React.FC = () => {
       });
       toast.success('Project created and members assigned!');
       setShowCreateModal(false);
-      setNewProject({ name: '', description: '', client: '', deadline: '', status: 'active' });
+      setNewProject({ name: '', description: '', deadline: '', status: 'todo' });
       setSelectedMembers([]);
       fetchProjects();
     } catch (err) {
@@ -126,7 +131,8 @@ const Projects: React.FC = () => {
         name: selectedProject.name,
         description: selectedProject.description,
         members: selectedMembers,
-        status: selectedProject.status
+        status: selectedProject.status,
+        end_date: selectedProject.end_date
       });
       toast.success('Project updated successfully!');
       setShowEditModal(false);
@@ -152,9 +158,11 @@ const Projects: React.FC = () => {
   };
 
   const statusColors = {
+    todo: 'bg-gray-100 text-gray-600',
     active: 'bg-blue-50 text-blue-600',
-    completed: 'bg-green-50 text-green-600',
     on_hold: 'bg-amber-50 text-amber-600',
+    drop: 'bg-red-50 text-red-600',
+    completed: 'bg-green-50 text-green-600',
   };
 
   const filteredProjects = projects.filter(p =>
@@ -181,8 +189,8 @@ const Projects: React.FC = () => {
 
       {/* Filters Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/30 dark:bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-white/20 dark:border-white/5">
-        <div className="flex space-x-1">
-          {['All', 'Active', 'Completed', 'On Hold'].map(f => (
+        <div className="flex space-x-1 overflow-x-auto pb-2 sm:pb-0">
+          {['All', 'Todo', 'Active', 'On Hold', 'Drop', 'Completed'].map(f => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -354,6 +362,32 @@ const Projects: React.FC = () => {
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Deadline</label>
+                  <input
+                    type="date"
+                    className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all text-text-primary"
+                    value={newProject.deadline}
+                    onChange={(e) => setNewProject({ ...newProject, deadline: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Initial Status</label>
+                  <select
+                    className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all text-text-primary appearance-none"
+                    value={newProject.status}
+                    onChange={(e) => setNewProject({ ...newProject, status: e.target.value as any })}
+                  >
+                    <option value="todo">Todo</option>
+                    <option value="active">Active</option>
+                    <option value="on_hold">On Hold</option>
+                    <option value="drop">Drop</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="space-y-4">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Assign Members</label>
                 <div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto p-2">
@@ -414,6 +448,32 @@ const Projects: React.FC = () => {
                   onChange={(e) => setSelectedProject({ ...selectedProject, name: e.target.value })}
                 />
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Deadline</label>
+                  <input
+                    type="date"
+                    className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all text-text-primary"
+                    value={selectedProject.end_date}
+                    onChange={(e) => setSelectedProject({ ...selectedProject, end_date: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Status</label>
+                  <select
+                    className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all text-text-primary appearance-none"
+                    value={selectedProject.status}
+                    onChange={(e) => setSelectedProject({ ...selectedProject, status: e.target.value as any })}
+                  >
+                    <option value="todo">Todo</option>
+                    <option value="active">Active</option>
+                    <option value="on_hold">On Hold</option>
+                    <option value="drop">Drop</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Description</label>
                 <textarea

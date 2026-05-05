@@ -38,21 +38,30 @@ interface Task {
   is_project_task?: boolean;
 }
 
-const LiveTimer: React.FC<{ start: string; baseMinutes: number }> = ({ start, baseMinutes }) => {
+const LiveTimer: React.FC<{ start: any; baseMinutes: number }> = ({ start, baseMinutes }) => {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    const startTime = new Date(start).getTime();
+    if (!start) return;
+    
+    // Handle both Firestore Timestamp and ISO string
+    const startTimeDate = start.toDate ? start.toDate() : new Date(start);
+    const startTime = startTimeDate.getTime();
+    
+    // If startTime is 0 or NaN, don't run timer
+    if (!startTime || isNaN(startTime)) return;
+
     const interval = setInterval(() => {
       const now = new Date().getTime();
-      setElapsed(Math.floor((now - startTime) / 1000));
+      const diff = Math.floor((now - startTime) / 1000);
+      setElapsed(Math.max(0, diff));
     }, 1000);
     return () => clearInterval(interval);
   }, [start]);
 
   const totalSeconds = ((baseMinutes || 0) * 60) + (elapsed || 0);
   
-  if (isNaN(totalSeconds)) {
+  if (isNaN(totalSeconds) || !start) {
     return <span className="font-mono text-primary tabular-nums">0m 0s</span>;
   }
 
@@ -207,6 +216,24 @@ const Tasks: React.FC = () => {
     }
   };
 
+  const updateProjectProgress = async (projectId: string) => {
+    if (!projectId) return;
+    try {
+      const q = query(collection(db, 'tasks'), where('project_id', '==', projectId));
+      const snap = await getDocs(q);
+      const allTasks = snap.docs.map(d => d.data());
+      const total = allTasks.length;
+      const completed = allTasks.filter(t => t.status === 'done').length;
+      
+      await updateDoc(doc(db, 'projects', projectId), {
+        total_tasks: total,
+        completed_tasks: completed
+      });
+    } catch (err) {
+      console.error('Error updating project progress:', err);
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!attendance?.check_in || attendance?.check_out) {
@@ -253,6 +280,11 @@ const Tasks: React.FC = () => {
       toast.success('Task allotted!');
       setShowCreateModal(false);
       setForm({ title: '', description: '', project_id: '', assigned_to: '', priority: 'medium', due_date: '', estimated_hours: 0 });
+      
+      // Update project progress
+      if (form.project_id) {
+        updateProjectProgress(form.project_id);
+      }
     } catch (err) {
       console.error(err);
       toast.error('Failed to create task');
@@ -297,6 +329,12 @@ const Tasks: React.FC = () => {
       toast.success('Task deleted successfully!');
       setShowDeleteModal(false);
       setTaskToDelete(null);
+
+      // Update project progress
+      const deletedTask = tasks.find(t => t.id === taskToDelete);
+      if (deletedTask?.project_id) {
+        updateProjectProgress(deletedTask.project_id);
+      }
     } catch (err) {
       console.error(err);
       toast.error('Failed to delete task');
@@ -324,6 +362,11 @@ const Tasks: React.FC = () => {
       });
 
       toast.success('Task approved!');
+      
+      // Update project progress
+      if (taskData?.project_id) {
+        updateProjectProgress(taskData.project_id);
+      }
     } catch (err) {
       console.error(err);
       toast.error('Failed to approve task');
@@ -383,7 +426,8 @@ const Tasks: React.FC = () => {
       if (isActive) {
         // Stop timer
         if (data?.active_session_start) {
-          const startTime = new Date(data.active_session_start).getTime();
+          const startTimeDate = data.active_session_start.toDate ? data.active_session_start.toDate() : new Date(data.active_session_start);
+          const startTime = startTimeDate.getTime();
           const durationMinutes = Math.floor((new Date().getTime() - startTime) / 60000);
 
           // Log the session
@@ -478,6 +522,13 @@ const Tasks: React.FC = () => {
       }
 
       await updateDoc(taskRef, updateData);
+
+      // Update project progress if status changed to/from 'done'
+      if (newStatus === 'done' || taskData?.status === 'done') {
+        if (taskData?.project_id) {
+          updateProjectProgress(taskData.project_id);
+        }
+      }
       
       // Update local state immediately to prevent UI flicker
       if (selectedTask?.id === taskId) {
@@ -509,9 +560,6 @@ const Tasks: React.FC = () => {
     const matchesPriority = priorityFilter === 'all' ? true : t.priority === priorityFilter;
     const matchesProject = projectFilter === 'all' ? true : t.project_id === projectFilter;
     const matchesAssignee = assigneeFilter === 'all' ? true : t.assigned_to === assigneeFilter;
-
-    // Hide tasks created inside projects from the main Tasks page for everyone (they stay in the Project page)
-    if (t.is_project_task) return false;
 
     const baseMatches = matchesSearch && matchesStatus && matchesPriority && matchesProject && matchesAssignee;
 

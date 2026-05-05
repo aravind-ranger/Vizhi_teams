@@ -53,7 +53,6 @@ interface Task {
 }
 
 const COLUMNS = [
-  { id: 'pending', title: 'Pending Approval' },
   { id: 'todo', title: 'To Do' },
   { id: 'in_progress', title: 'In Progress' },
   { id: 'review', title: 'Review' },
@@ -166,6 +165,27 @@ const ProjectDetails: React.FC = () => {
     setEmployees(empSnap.docs.map(d => ({ id: d.id, ...d.data() })));
   };
 
+  const updateProjectProgress = async () => {
+    if (!id) return;
+    try {
+      const q = query(collection(db, 'tasks'), where('project_id', '==', id));
+      const snap = await getDocs(q);
+      const allTasks = snap.docs.map(d => d.data());
+      const total = allTasks.length;
+      const completed = allTasks.filter(t => t.status === 'done').length;
+      
+      await updateDoc(doc(db, 'projects', id), {
+        total_tasks: total,
+        completed_tasks: completed
+      });
+      
+      // Update local project state
+      setProject((prev: any) => ({ ...prev, total_tasks: total, completed_tasks: completed }));
+    } catch (err) {
+      console.error('Error updating project progress:', err);
+    }
+  };
+
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id || !form.title || !form.assigned_to) {
@@ -225,6 +245,10 @@ const ProjectDetails: React.FC = () => {
       toast.success(isAutoApproved ? 'Task created!' : 'Task submitted for approval!');
       setShowCreateModal(false);
       setForm({ title: '', description: '', assigned_to: '', priority: 'medium', due_date: '' });
+      
+      if (isAutoApproved) {
+        updateProjectProgress();
+      }
     } catch (err) {
       console.error('Task creation error:', err);
       toast.error('Failed to create task. Check your permissions.');
@@ -301,6 +325,11 @@ const ProjectDetails: React.FC = () => {
           is_read: false,
           created_at: serverTimestamp()
         });
+
+        // Update project progress if status changed to/from 'done'
+        if (newStatus === 'done' || task.status === 'done') {
+          updateProjectProgress();
+        }
       } catch (err) {
         console.error('Failed to update task status in Firestore', err);
       }
@@ -322,6 +351,31 @@ const ProjectDetails: React.FC = () => {
             <p className="text-text-muted mt-1">{project?.description}</p>
           </div>
           <div className="flex items-center space-x-3">
+            {user?.role === 'admin' && (
+              <div className="flex items-center space-x-2 bg-gray-50 dark:bg-white/5 p-1.5 rounded-2xl border border-gray-100 dark:border-white/10 mr-2">
+                <span className="text-[9px] font-black text-text-muted uppercase tracking-widest ml-2 mr-1">Status:</span>
+                <select 
+                  className="bg-transparent border-none text-xs font-black text-primary focus:ring-0 cursor-pointer uppercase tracking-tighter"
+                  value={project?.status || 'todo'}
+                  onChange={async (e) => {
+                    const newStatus = e.target.value;
+                    try {
+                      await updateDoc(doc(db, 'projects', id!), { status: newStatus });
+                      setProject({ ...project, status: newStatus });
+                      toast.success(`Project status: ${newStatus.toUpperCase()}`);
+                    } catch (err) {
+                      toast.error('Failed to update status');
+                    }
+                  }}
+                >
+                  <option value="todo">Todo</option>
+                  <option value="active">Active</option>
+                  <option value="on_hold">On Hold</option>
+                  <option value="drop">Drop</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
+            )}
             {user?.role === 'admin' && (
               <button 
                 onClick={() => setShowCreateModal(true)}
