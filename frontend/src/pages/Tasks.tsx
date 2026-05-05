@@ -1,26 +1,66 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
-  Plus, Search, Filter, Layout, List, MoreVertical,
-  CheckCircle2, Clock, AlertCircle, Calendar, User, X,
-  Play, Square, Timer as TimerIcon, MessageSquare,
-  ChevronRight, ArrowRight, Save, Link, Trash2
-} from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import { db } from '../firebase.ts';
-import { collection, query, getDocs, addDoc, updateDoc, doc, serverTimestamp, orderBy, where, getDoc, onSnapshot, writeBatch, deleteDoc } from 'firebase/firestore';
-import { useTitle } from '../hooks/useTitle';
-import StatusBadge from '../components/StatusBadge';
-import PriorityBadge from '../components/PriorityBadge';
-import Avatar from '../components/Avatar';
-import { useAuthStore } from '../store/useAuthStore';
-import { useAttendanceStore } from '../store/useAttendanceStore';
+  Plus,
+  Search,
+  Filter,
+  Layout,
+  List,
+  MoreVertical,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Calendar,
+  User,
+  X,
+  Play,
+  Square,
+  Timer as TimerIcon,
+  MessageSquare,
+  ChevronRight,
+  ArrowRight,
+  Save,
+  Link,
+  Trash2,
+} from "lucide-react";
+import { toast } from "react-hot-toast";
+import { db } from "../firebase.ts";
+import {
+  collection,
+  query,
+  getDocs,
+  addDoc,
+  updateDoc,
+  doc,
+  serverTimestamp,
+  orderBy,
+  where,
+  getDoc,
+  onSnapshot,
+  writeBatch,
+  deleteDoc,
+} from "firebase/firestore";
+import { useTitle } from "../hooks/useTitle";
+import StatusBadge from "../components/StatusBadge";
+import PriorityBadge from "../components/PriorityBadge";
+import Avatar from "../components/Avatar";
+import { useAuthStore } from "../store/useAuthStore";
+import { useAttendanceStore } from "../store/useAttendanceStore";
 
 interface Task {
   id: string;
   title: string;
   description: string;
-  status: 'todo' | 'in_progress' | 'review' | 'done' | 'active' | 'completed' | 'planned' | 'pending' | 'paused_by_break';
-  priority: 'low' | 'medium' | 'high';
+  status:
+    | "todo"
+    | "in_progress"
+    | "review"
+    | "done"
+    | "active"
+    | "completed"
+    | "planned"
+    | "pending"
+    | "paused_by_break";
+  priority: "low" | "medium" | "high";
   project_name: string;
   project_id: string;
   assignee_name: string;
@@ -38,16 +78,19 @@ interface Task {
   is_project_task?: boolean;
 }
 
-const LiveTimer: React.FC<{ start: any; baseMinutes: number }> = ({ start, baseMinutes }) => {
+const LiveTimer: React.FC<{ start: any; baseMinutes: number }> = ({
+  start,
+  baseMinutes,
+}) => {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
     if (!start) return;
-    
+
     // Handle both Firestore Timestamp and ISO string
     const startTimeDate = start.toDate ? start.toDate() : new Date(start);
     const startTime = startTimeDate.getTime();
-    
+
     // If startTime is 0 or NaN, don't run timer
     if (!startTime || isNaN(startTime)) return;
 
@@ -59,8 +102,8 @@ const LiveTimer: React.FC<{ start: any; baseMinutes: number }> = ({ start, baseM
     return () => clearInterval(interval);
   }, [start]);
 
-  const totalSeconds = ((baseMinutes || 0) * 60) + (elapsed || 0);
-  
+  const totalSeconds = (baseMinutes || 0) * 60 + (elapsed || 0);
+
   if (isNaN(totalSeconds) || !start) {
     return <span className="font-mono text-primary tabular-nums">0m 0s</span>;
   }
@@ -71,7 +114,8 @@ const LiveTimer: React.FC<{ start: any; baseMinutes: number }> = ({ start, baseM
 
   return (
     <span className="font-mono text-primary tabular-nums">
-      {h > 0 && `${h}h `}{m}m {s}s
+      {h > 0 && `${h}h `}
+      {m}m {s}s
     </span>
   );
 };
@@ -79,9 +123,9 @@ const LiveTimer: React.FC<{ start: any; baseMinutes: number }> = ({ start, baseM
 const Tasks: React.FC = () => {
   const { user } = useAuthStore();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [view, setView] = useState<'kanban' | 'list'>('kanban');
+  const [view, setView] = useState<"kanban" | "list">("kanban");
   const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -93,60 +137,70 @@ const Tasks: React.FC = () => {
 
   // Advanced Filters & Pagination
   const [showFilters, setShowFilters] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [projectFilter, setProjectFilter] = useState<string>('all');
-  const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [projectFilter, setProjectFilter] = useState<string>("all");
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const tasksPerPage = 10;
 
-  useTitle('Tasks');
+  useTitle("Tasks");
 
   const [form, setForm] = useState(() => {
-    const saved = localStorage.getItem('task_form_backup');
-    return saved ? JSON.parse(saved) : {
-      title: '',
-      description: '',
-      project_id: '',
-      assigned_to: '',
-      priority: 'medium',
-      due_date: '',
-      estimated_hours: 0
-    };
+    const saved = localStorage.getItem("task_form_backup");
+    return saved
+      ? JSON.parse(saved)
+      : {
+          title: "",
+          description: "",
+          project_id: "",
+          assigned_to: "",
+          priority: "medium",
+          due_date: "",
+          estimated_hours: 0,
+        };
   });
 
   // Backup form to localStorage
   useEffect(() => {
-    localStorage.setItem('task_form_backup', JSON.stringify(form));
+    localStorage.setItem("task_form_backup", JSON.stringify(form));
   }, [form]);
 
   useEffect(() => {
     fetchMetadata();
 
     // Real-time listener for tasks
-    const tasksRef = collection(db, 'tasks');
-    const q = query(tasksRef, orderBy('created_at', 'desc'));
+    const tasksRef = collection(db, "tasks");
+    const q = query(tasksRef, orderBy("created_at", "desc"));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const tasksData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        due_date: doc.data().due_date?.toDate?.()?.toISOString() || doc.data().due_date,
-        active_session_start: doc.data().active_session_start?.toDate?.()?.toISOString() || doc.data().active_session_start,
-      })) as any;
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const tasksData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          due_date:
+            doc.data().due_date?.toDate?.()?.toISOString() ||
+            doc.data().due_date,
+          active_session_start:
+            doc.data().active_session_start?.toDate?.()?.toISOString() ||
+            doc.data().active_session_start,
+        })) as any;
 
-      setTasks(tasksData);
-      setIsLoading(false);
+        setTasks(tasksData);
+        setIsLoading(false);
 
-      // Update selected task if open
-      setSelectedTask(prev => {
-        if (!prev) return null;
-        return tasksData.find(t => t.id === prev.id) || prev;
-      });
-    }, (err) => {
-      console.error('Task listener error:', err);
-      setIsLoading(false);
-    });
+        // Update selected task if open
+        setSelectedTask((prev) => {
+          if (!prev) return null;
+          return tasksData.find((t) => t.id === prev.id) || prev;
+        });
+      },
+      (err) => {
+        console.error("Task listener error:", err);
+        setIsLoading(false);
+      },
+    );
 
     return () => unsubscribe();
   }, []);
@@ -158,42 +212,48 @@ const Tasks: React.FC = () => {
   useEffect(() => {
     const syncBreakWithTasks = async () => {
       // Find tasks that need syncing (ONLY for the current logged-in user)
-      const activeTask = tasks.find(t => t.active_session_id === 'active' && t.assigned_to === user?.id);
-      const autoPausedTask = tasks.find(t => t.is_paused_by_break === true && t.assigned_to === user?.id);
+      const activeTask = tasks.find(
+        (t) => t.active_session_id === "active" && t.assigned_to === user?.id,
+      );
+      const autoPausedTask = tasks.find(
+        (t) => t.is_paused_by_break === true && t.assigned_to === user?.id,
+      );
 
       if (isPaused && activeTask) {
         // Automatically pause the active task when break starts
-        const taskRef = doc(db, 'tasks', activeTask.id);
+        const taskRef = doc(db, "tasks", activeTask.id);
         const startTime = new Date(activeTask.active_session_start!).getTime();
-        const durationMinutes = Math.floor((new Date().getTime() - startTime) / 60000);
+        const durationMinutes = Math.floor(
+          (new Date().getTime() - startTime) / 60000,
+        );
 
-        await addDoc(collection(db, 'task_sessions'), {
+        await addDoc(collection(db, "task_sessions"), {
           task_id: activeTask.id,
           user_id: user?.id,
           start_time: activeTask.active_session_start,
           end_time: serverTimestamp(),
           duration_minutes: durationMinutes,
           project_id: activeTask.project_id,
-          type: 'break_auto_pause'
+          type: "break_auto_pause",
         });
 
         await updateDoc(taskRef, {
           active_session_id: null,
           active_session_start: null,
           is_paused_by_break: true,
-          total_minutes_logged: (activeTask.total_minutes_logged || 0) + durationMinutes
+          total_minutes_logged:
+            (activeTask.total_minutes_logged || 0) + durationMinutes,
         });
-        toast('Timer frozen for break', { icon: '❄️' });
-      }
-      else if (!isPaused && autoPausedTask) {
+        toast("Timer frozen for break", { icon: "❄️" });
+      } else if (!isPaused && autoPausedTask) {
         // Automatically resume the task when break ends
-        const taskRef = doc(db, 'tasks', autoPausedTask.id);
+        const taskRef = doc(db, "tasks", autoPausedTask.id);
         await updateDoc(taskRef, {
-          active_session_id: 'active',
+          active_session_id: "active",
           active_session_start: serverTimestamp(),
-          is_paused_by_break: false
+          is_paused_by_break: false,
         });
-        toast('Timer resumed!', { icon: '▶️' });
+        toast("Timer resumed!", { icon: "▶️" });
       }
     };
 
@@ -205,12 +265,12 @@ const Tasks: React.FC = () => {
   const fetchMetadata = async () => {
     try {
       // Fetch Projects
-      const projSnap = await getDocs(collection(db, 'projects'));
-      setProjects(projSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const projSnap = await getDocs(collection(db, "projects"));
+      setProjects(projSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
 
       // Fetch Employees
-      const empSnap = await getDocs(collection(db, 'users'));
-      setEmployees(empSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const empSnap = await getDocs(collection(db, "users"));
+      setEmployees(empSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
     } catch (err) {
       console.error(err);
     }
@@ -219,75 +279,86 @@ const Tasks: React.FC = () => {
   const updateProjectProgress = async (projectId: string) => {
     if (!projectId) return;
     try {
-      const q = query(collection(db, 'tasks'), where('project_id', '==', projectId));
+      const q = query(
+        collection(db, "tasks"),
+        where("project_id", "==", projectId),
+      );
       const snap = await getDocs(q);
-      const allTasks = snap.docs.map(d => d.data());
+      const allTasks = snap.docs.map((d) => d.data());
       const total = allTasks.length;
-      const completed = allTasks.filter(t => t.status === 'done').length;
-      
-      await updateDoc(doc(db, 'projects', projectId), {
+      const completed = allTasks.filter((t) => t.status === "done").length;
+
+      await updateDoc(doc(db, "projects", projectId), {
         total_tasks: total,
-        completed_tasks: completed
+        completed_tasks: completed,
       });
     } catch (err) {
-      console.error('Error updating project progress:', err);
+      console.error("Error updating project progress:", err);
     }
   };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!attendance?.check_in || attendance?.check_out) {
-      toast.error('You must be checked in to create tasks ⚠️');
+      toast.error("You must be checked in to create tasks ⚠️");
       return;
     }
     try {
-      const project = projects.find(p => p.id === form.project_id);
-      const assignee = employees.find(emp => emp.id === form.assigned_to);
+      const project = projects.find((p) => p.id === form.project_id);
+      const assignee = employees.find((emp) => emp.id === form.assigned_to);
 
-      const isAutoApproved = user?.role === 'admin';
+      const isAutoApproved = user?.role === "admin";
 
       // Generate Task ID: 3 letters of assignee + 3 random numbers
-      const targetName = assignee?.name || user?.name || 'SYS';
+      const targetName = assignee?.name || user?.name || "SYS";
       const prefix = targetName.slice(0, 3).toUpperCase();
       const randomNum = Math.floor(100 + Math.random() * 900);
       const taskCode = `${prefix}${randomNum}`;
 
       const newTask = {
         ...form,
-        project_name: project?.name || 'Unknown Project',
-        assignee_name: assignee?.name || 'Unassigned',
-        status: 'todo',
+        project_name: project?.name || "Unknown Project",
+        assignee_name: assignee?.name || "Unassigned",
+        status: "todo",
         total_minutes_logged: 0,
         active_session_id: null,
         is_approved: true,
         task_code: taskCode,
         created_by: user?.id,
-        created_at: serverTimestamp()
+        created_at: serverTimestamp(),
       };
 
-      await addDoc(collection(db, 'tasks'), newTask);
+      await addDoc(collection(db, "tasks"), newTask);
 
       // Broadcast notification
-      await addDoc(collection(db, 'notifications'), {
-        user_id: 'all',
-        title: 'New Task Assignment',
-        message: `${user?.name} has assigned the ${project?.name || 'Project'} to ${assignee?.name || 'Unassigned'}`,
-        type: 'task_created',
+      await addDoc(collection(db, "notifications"), {
+        user_id: "all",
+        title: "New Task Assignment",
+        message: `${user?.name} has assigned the ${project?.name || "Project"} to ${assignee?.name || "Unassigned"}`,
+        type: "task_created",
         is_read: false,
-        created_at: serverTimestamp()
+        created_at: serverTimestamp(),
       });
 
-      toast.success('Task allotted!');
+      toast.success("Task allotted!");
       setShowCreateModal(false);
-      setForm({ title: '', description: '', project_id: '', assigned_to: '', priority: 'medium', due_date: '', estimated_hours: 0 });
-      
+      setForm({
+        title: "",
+        description: "",
+        project_id: "",
+        assigned_to: "",
+        priority: "medium",
+        due_date: "",
+        estimated_hours: 0,
+      });
+
       // Update project progress
       if (form.project_id) {
         updateProjectProgress(form.project_id);
       }
     } catch (err) {
       console.error(err);
-      toast.error('Failed to create task');
+      toast.error("Failed to create task");
     }
   };
 
@@ -295,216 +366,228 @@ const Tasks: React.FC = () => {
     e.preventDefault();
     if (!selectedTask) return;
     try {
-      const taskRef = doc(db, 'tasks', selectedTask.id);
+      const taskRef = doc(db, "tasks", selectedTask.id);
       await updateDoc(taskRef, {
         title: selectedTask.title,
         description: selectedTask.description,
         priority: selectedTask.priority,
         due_date: selectedTask.due_date,
-        estimated_hours: selectedTask.estimated_hours
+        estimated_hours: selectedTask.estimated_hours,
       });
-      toast.success('Task updated successfully!');
+      toast.success("Task updated successfully!");
       setShowEditModal(false);
     } catch (err) {
       console.error(err);
-      toast.error('Failed to update task');
+      toast.error("Failed to update task");
     }
   };
 
   const handleDeleteTask = async () => {
     if (!taskToDelete) return;
     try {
-      await deleteDoc(doc(db, 'tasks', taskToDelete));
+      await deleteDoc(doc(db, "tasks", taskToDelete));
 
       // Log deletion for Admin
-      await addDoc(collection(db, 'notifications'), {
-        user_id: 'admin',
-        title: 'Task Deleted 🗑️',
+      await addDoc(collection(db, "notifications"), {
+        user_id: "admin",
+        title: "Task Deleted 🗑️",
         message: `${user?.name} deleted a task.`,
-        type: 'system',
+        type: "system",
         is_read: false,
-        created_at: serverTimestamp()
+        created_at: serverTimestamp(),
       });
 
-      toast.success('Task deleted successfully!');
+      toast.success("Task deleted successfully!");
       setShowDeleteModal(false);
       setTaskToDelete(null);
 
       // Update project progress
-      const deletedTask = tasks.find(t => t.id === taskToDelete);
+      const deletedTask = tasks.find((t) => t.id === taskToDelete);
       if (deletedTask?.project_id) {
         updateProjectProgress(deletedTask.project_id);
       }
     } catch (err) {
       console.error(err);
-      toast.error('Failed to delete task');
+      toast.error("Failed to delete task");
     }
   };
 
   const approveTask = async (taskId: string) => {
     try {
-      const taskRef = doc(db, 'tasks', taskId);
+      const taskRef = doc(db, "tasks", taskId);
       const taskSnap = await getDoc(taskRef);
       const taskData = taskSnap.data();
 
       await updateDoc(taskRef, {
         is_approved: true,
-        status: 'todo'
+        status: "todo",
       });
 
-      await addDoc(collection(db, 'notifications'), {
+      await addDoc(collection(db, "notifications"), {
         user_id: taskData?.assigned_to,
-        title: 'Task Approved! ✅',
+        title: "Task Approved! ✅",
         message: `Your task "${taskData?.title}" has been approved. You can now start working.`,
-        type: 'approval',
+        type: "approval",
         is_read: false,
-        created_at: serverTimestamp()
+        created_at: serverTimestamp(),
       });
 
-      toast.success('Task approved!');
-      
+      toast.success("Task approved!");
+
       // Update project progress
       if (taskData?.project_id) {
         updateProjectProgress(taskData.project_id);
       }
     } catch (err) {
       console.error(err);
-      toast.error('Failed to approve task');
+      toast.error("Failed to approve task");
     }
   };
 
   const rejectTask = async (taskId: string, reason: string) => {
     try {
-      const taskRef = doc(db, 'tasks', taskId);
+      const taskRef = doc(db, "tasks", taskId);
       const taskSnap = await getDoc(taskRef);
       const taskData = taskSnap.data();
 
       await updateDoc(taskRef, {
         is_approved: false,
-        status: 'pending',
-        rejection_reason: reason
+        status: "pending",
+        rejection_reason: reason,
       });
 
-      await addDoc(collection(db, 'notifications'), {
+      await addDoc(collection(db, "notifications"), {
         user_id: taskData?.assigned_to,
-        title: 'Task Rejected ❌',
+        title: "Task Rejected ❌",
         message: `Your task "${taskData?.title}" was rejected. Reason: ${reason}`,
-        type: 'rejection',
+        type: "rejection",
         is_read: false,
-        created_at: serverTimestamp()
+        created_at: serverTimestamp(),
       });
 
-      toast.error('Task rejected');
+      toast.error("Task rejected");
     } catch (err) {
       console.error(err);
-      toast.error('Failed to reject task');
+      toast.error("Failed to reject task");
     }
   };
 
   const toggleTimer = async (taskId: string, isActive: boolean) => {
     if (!attendance?.check_in || attendance?.check_out) {
-      toast.error('You must be checked in to work on tasks ⚠️');
+      toast.error("You must be checked in to work on tasks ⚠️");
       return;
     }
 
     if (attendance?.is_paused) {
-      toast.error('Please resume work before interacting with task timers');
+      toast.error("Please resume work before interacting with task timers");
       return;
     }
 
     try {
-      const taskRef = doc(db, 'tasks', taskId);
+      const taskRef = doc(db, "tasks", taskId);
       const taskSnap = await getDoc(taskRef);
       const data = taskSnap.data();
 
       // SECURITY: Only the assigned user can toggle the timer
       if (data?.assigned_to !== user?.id) {
-        toast.error("Access Denied: You can only manage your own task timers ✋");
+        toast.error(
+          "Access Denied: You can only manage your own task timers ✋",
+        );
         return;
       }
 
       if (isActive) {
         // Stop timer
         if (data?.active_session_start) {
-          const startTimeDate = data.active_session_start.toDate ? data.active_session_start.toDate() : new Date(data.active_session_start);
+          const startTimeDate = data.active_session_start.toDate
+            ? data.active_session_start.toDate()
+            : new Date(data.active_session_start);
           const startTime = startTimeDate.getTime();
-          const durationMinutes = Math.floor((new Date().getTime() - startTime) / 60000);
+          const durationMinutes = Math.floor(
+            (new Date().getTime() - startTime) / 60000,
+          );
 
           // Log the session
-          await addDoc(collection(db, 'task_sessions'), {
+          await addDoc(collection(db, "task_sessions"), {
             task_id: taskId,
             user_id: data.assigned_to || user?.id,
             start_time: data.active_session_start,
             end_time: serverTimestamp(),
             duration_minutes: durationMinutes,
-            project_id: data.project_id
+            project_id: data.project_id,
           });
 
           await updateDoc(taskRef, {
             active_session_id: null,
             active_session_start: null,
-            total_minutes_logged: (data.total_minutes_logged || 0) + durationMinutes
+            total_minutes_logged:
+              (data.total_minutes_logged || 0) + durationMinutes,
           });
 
           // Add to audit logs
-          await addDoc(collection(db, 'audit_logs'), {
+          await addDoc(collection(db, "audit_logs"), {
             user_id: user?.id,
             user_name: user?.name,
-            action: 'task_stop',
+            action: "task_stop",
             details: `Stopped task: ${data.title} (${durationMinutes} min)`,
             duration_minutes: durationMinutes,
-            created_at: serverTimestamp()
+            created_at: serverTimestamp(),
           });
         }
-        toast.success('Timer stopped');
+        toast.success("Timer stopped");
       } else {
         // Start timer
         await updateDoc(taskRef, {
-          active_session_id: 'active',
+          active_session_id: "active",
           active_session_start: serverTimestamp(),
-          status: 'in_progress'
+          status: "in_progress",
         });
 
         // Add to audit logs
-        await addDoc(collection(db, 'audit_logs'), {
+        await addDoc(collection(db, "audit_logs"), {
           user_id: user?.id,
           user_name: user?.name,
-          action: 'task_start',
+          action: "task_start",
           details: `Started task: ${data?.title}`,
-          created_at: serverTimestamp()
+          created_at: serverTimestamp(),
         });
 
-        toast.success('Timer started');
+        toast.success("Timer started");
       }
     } catch (err: any) {
       console.error(err);
-      toast.error('Failed to toggle timer');
+      toast.error("Failed to toggle timer");
     }
   };
 
   const updateStatus = async (taskId: string, newStatus: string) => {
     try {
-      const taskRef = doc(db, 'tasks', taskId);
-      const taskData = tasks.find(t => t.id === taskId);
-      
+      const taskRef = doc(db, "tasks", taskId);
+      const taskData = tasks.find((t) => t.id === taskId);
+
       const updateData: any = { status: newStatus };
-      
+
       // If moving to 'done', handle timer stopping and display total time
-      if (newStatus === 'done') {
+      if (newStatus === "done") {
         let totalMins = taskData?.total_minutes_logged || 0;
 
-        if (taskData?.active_session_id === 'active' && taskData.active_session_start) {
+        if (
+          taskData?.active_session_id === "active" &&
+          taskData.active_session_start
+        ) {
           const startTime = new Date(taskData.active_session_start).getTime();
-          const durationMinutes = Math.floor((new Date().getTime() - startTime) / 60000);
+          const durationMinutes = Math.floor(
+            (new Date().getTime() - startTime) / 60000,
+          );
 
           // Log the session
-          await addDoc(collection(db, 'task_sessions'), {
+          await addDoc(collection(db, "task_sessions"), {
             task_id: taskId,
             user_id: taskData.assigned_to || user?.id,
             start_time: taskData.active_session_start,
             end_time: serverTimestamp(),
             duration_minutes: durationMinutes,
-            project_id: taskData.project_id
+            project_id: taskData.project_id,
           });
 
           totalMins += durationMinutes;
@@ -513,92 +596,139 @@ const Tasks: React.FC = () => {
           updateData.total_minutes_logged = totalMins;
         }
 
-        toast.success(`Mission Accomplished! Total Tracked: ${formatMinutes(totalMins)}`, {
-          icon: '🎯',
-          duration: 5000
-        });
+        toast.success(
+          `Mission Accomplished! Total Tracked: ${formatMinutes(totalMins)}`,
+          {
+            icon: "🎯",
+            duration: 5000,
+          },
+        );
       } else {
-        toast.success(`Task moved to ${newStatus.replace('_', ' ')}`);
+        toast.success(`Task moved to ${newStatus.replace("_", " ")}`);
       }
 
       await updateDoc(taskRef, updateData);
 
       // Update project progress if status changed to/from 'done'
-      if (newStatus === 'done' || taskData?.status === 'done') {
+      if (newStatus === "done" || taskData?.status === "done") {
         if (taskData?.project_id) {
           updateProjectProgress(taskData.project_id);
         }
       }
-      
+
       // Update local state immediately to prevent UI flicker
       if (selectedTask?.id === taskId) {
         setSelectedTask({ ...selectedTask, ...updateData });
       }
     } catch (err) {
       console.error(err);
-      toast.error('Failed to update task status');
+      toast.error("Failed to update task status");
     }
   };
 
   const formatMinutes = (mins: number) => {
-    if (isNaN(mins) || mins === undefined || mins === null) return '0m';
+    if (isNaN(mins) || mins === undefined || mins === null) return "0m";
     const h = Math.floor(mins / 60);
     const m = Math.round(mins % 60);
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
   };
 
-  const filteredTasks = tasks.filter(t => {
-    const title = t.title || '';
-    const projectName = t.project_name || '';
-    const taskCode = t.task_code || '';
-    
-    const matchesSearch = title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  const filteredTasks = tasks.filter((t) => {
+    const title = t.title || "";
+    const projectName = t.project_name || "";
+    const taskCode = t.task_code || "";
+
+    const matchesSearch =
+      title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       taskCode.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = statusFilter === 'all' ? true : t.status === statusFilter;
-    const matchesPriority = priorityFilter === 'all' ? true : t.priority === priorityFilter;
-    const matchesProject = projectFilter === 'all' ? true : t.project_id === projectFilter;
-    const matchesAssignee = assigneeFilter === 'all' ? true : t.assigned_to === assigneeFilter;
+    const matchesStatus =
+      statusFilter === "all" ? true : t.status === statusFilter;
+    const matchesPriority =
+      priorityFilter === "all" ? true : t.priority === priorityFilter;
+    const matchesProject =
+      projectFilter === "all" ? true : t.project_id === projectFilter;
+    const matchesAssignee =
+      assigneeFilter === "all" ? true : t.assigned_to === assigneeFilter;
 
-    const baseMatches = matchesSearch && matchesStatus && matchesPriority && matchesProject && matchesAssignee;
+    const baseMatches =
+      matchesSearch &&
+      matchesStatus &&
+      matchesPriority &&
+      matchesProject &&
+      matchesAssignee;
 
     // Admin sees everything, employees only see their assigned tasks
-    if (user?.role === 'admin') return baseMatches;
-    return baseMatches && (t.assigned_to === user?.id || t.created_by === user?.id);
+    if (user?.role === "admin") return baseMatches;
+    return (
+      baseMatches && (t.assigned_to === user?.id || t.created_by === user?.id)
+    );
   });
 
   // Pagination logic
   const totalPages = Math.ceil(filteredTasks.length / tasksPerPage);
   const indexOfLastTask = currentPage * tasksPerPage;
   const indexOfFirstTask = indexOfLastTask - tasksPerPage;
-  const currentTasks = view === 'list' ? filteredTasks.slice(indexOfFirstTask, indexOfLastTask) : filteredTasks;
+  const currentTasks =
+    view === "list"
+      ? filteredTasks.slice(indexOfFirstTask, indexOfLastTask)
+      : filteredTasks;
 
   const columns = [
-    { id: 'todo', title: 'To Do', icon: Clock, color: 'text-gray-400', zone: 'bg-gray-50 dark:bg-white/5' },
-    { id: 'in_progress', title: 'In Progress', icon: Play, color: 'text-warning', zone: 'bg-amber-50/30 dark:bg-amber-900/10' },
-    { id: 'review', title: 'Review', icon: Search, color: 'text-primary', zone: 'bg-indigo-50/30 dark:bg-indigo-900/10' },
-    { id: 'done', title: 'Done', icon: CheckCircle2, color: 'text-success', zone: 'bg-emerald-50/30 dark:bg-emerald-900/10' },
+    {
+      id: "todo",
+      title: "To Do",
+      icon: Clock,
+      color: "text-gray-400",
+      zone: "bg-gray-50 dark:bg-white/5",
+    },
+    {
+      id: "in_progress",
+      title: "In Progress",
+      icon: Play,
+      color: "text-warning",
+      zone: "bg-amber-50/30 dark:bg-amber-900/10",
+    },
+    {
+      id: "review",
+      title: "Review",
+      icon: Search,
+      color: "text-primary",
+      zone: "bg-indigo-50/30 dark:bg-indigo-900/10",
+    },
+    {
+      id: "done",
+      title: "Done",
+      icon: CheckCircle2,
+      color: "text-success",
+      zone: "bg-emerald-50/30 dark:bg-emerald-900/10",
+    },
   ];
 
   return (
     <div className="space-y-6 animate-slide-up">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black text-text-primary tracking-tight">Active Tasks</h2>
-          <p className="text-sm text-text-muted font-medium">Sprint cycle: <span className="text-primary">Q2 2026 - Sprint 4</span></p>
+          <h2 className="text-3xl font-black text-text-primary tracking-tight">
+            Active Tasks
+          </h2>
+          <p className="text-sm text-text-muted font-medium">
+            Sprint cycle:{" "}
+            <span className="text-primary">Q2 2026 - Sprint 4</span>
+          </p>
         </div>
         <div className="flex items-center space-x-3">
           <div className="bg-gray-100 dark:bg-white/5 p-1 rounded-2xl flex items-center shadow-inner">
             <button
-              onClick={() => setView('kanban')}
-              className={`p-2.5 rounded-xl transition-all ${view === 'kanban' ? 'bg-white dark:bg-primary shadow-md text-primary dark:text-white scale-105' : 'text-text-muted hover:text-text-secondary'}`}
+              onClick={() => setView("kanban")}
+              className={`p-2.5 rounded-xl transition-all ${view === "kanban" ? "bg-white dark:bg-primary shadow-md text-primary dark:text-white scale-105" : "text-text-muted hover:text-text-secondary"}`}
             >
               <Layout className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setView('list')}
-              className={`p-2.5 rounded-xl transition-all ${view === 'list' ? 'bg-white dark:bg-primary shadow-md text-primary dark:text-white scale-105' : 'text-text-muted hover:text-text-secondary'}`}
+              onClick={() => setView("list")}
+              className={`p-2.5 rounded-xl transition-all ${view === "list" ? "bg-white dark:bg-primary shadow-md text-primary dark:text-white scale-105" : "text-text-muted hover:text-text-secondary"}`}
             >
               <List className="w-4 h-4" />
             </button>
@@ -621,13 +751,16 @@ const Tasks: React.FC = () => {
               type="text"
               placeholder="Search tasks, projects, or team..."
               value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
               className="input h-14 pl-12 border-none shadow-sm focus:ring-4 focus:ring-primary/10 transition-all font-medium"
             />
           </div>
-          <button 
+          <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`h-14 px-6 rounded-2xl glass flex items-center text-sm font-bold border-none transition-all shadow-sm ${showFilters ? 'bg-primary text-white shadow-primary/20' : 'text-text-secondary hover:bg-white/80'}`}
+            className={`h-14 px-6 rounded-2xl glass flex items-center text-sm font-bold border-none transition-all shadow-sm ${showFilters ? "bg-primary text-white shadow-primary/20" : "text-text-secondary hover:bg-white/80"}`}
           >
             <Filter className="w-4 h-4 mr-3" />
             Advanced Filters
@@ -637,52 +770,113 @@ const Tasks: React.FC = () => {
         {showFilters && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 bg-white dark:bg-glass rounded-[32px] shadow-sm border border-gray-100 dark:border-white/10 animate-in slide-in-from-top-4 duration-300">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Status</label>
-              <select 
-                value={statusFilter} 
-                onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold border-none outline-none focus:ring-2 focus:ring-primary/20 appearance-none dark:text-white"
+              <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
+                Status
+              </label>
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full h-12 px-4 bg-gray-50 dark:bg-slate-900 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/20 appearance-none text-text-primary dark:text-white dark:[color-scheme:dark]"
               >
-                <option value="all">All Statuses</option>
-                <option value="todo">To Do</option>
-                <option value="in_progress">In Progress</option>
-                <option value="review">Review</option>
-                <option value="done">Done</option>
+                <option value="all" className="bg-white dark:bg-slate-900">
+                  All Statuses
+                </option>
+                <option value="todo" className="bg-white dark:bg-slate-900">
+                  To Do
+                </option>
+                <option
+                  value="in_progress"
+                  className="bg-white dark:bg-slate-900"
+                >
+                  In Progress
+                </option>
+                <option value="review" className="bg-white dark:bg-slate-900">
+                  Review
+                </option>
+                <option value="done" className="bg-white dark:bg-slate-900">
+                  Done
+                </option>
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Priority</label>
-              <select 
-                value={priorityFilter} 
-                onChange={e => { setPriorityFilter(e.target.value); setCurrentPage(1); }}
-                className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold border-none outline-none focus:ring-2 focus:ring-primary/20 appearance-none dark:text-white"
+              <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
+                Priority
+              </label>
+              <select
+                value={priorityFilter}
+                onChange={(e) => {
+                  setPriorityFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full h-12 px-4 bg-gray-50 dark:bg-slate-900 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/20 appearance-none text-text-primary dark:text-white dark:[color-scheme:dark]"
               >
-                <option value="all">All Priorities</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
+                <option value="all" className="bg-white dark:bg-slate-900">
+                  All Priorities
+                </option>
+                <option value="low" className="bg-white dark:bg-slate-900">
+                  Low
+                </option>
+                <option value="medium" className="bg-white dark:bg-slate-900">
+                  Medium
+                </option>
+                <option value="high" className="bg-white dark:bg-slate-900">
+                  High
+                </option>
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Project</label>
-              <select 
-                value={projectFilter} 
-                onChange={e => { setProjectFilter(e.target.value); setCurrentPage(1); }}
-                className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold border-none outline-none focus:ring-2 focus:ring-primary/20 appearance-none dark:text-white"
+              <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
+                Project
+              </label>
+              <select
+                value={projectFilter}
+                onChange={(e) => {
+                  setProjectFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full h-12 px-4 bg-gray-50 dark:bg-slate-900 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/20 appearance-none text-text-primary dark:text-white dark:[color-scheme:dark]"
               >
-                <option value="all">All Projects</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                <option value="all" className="bg-white dark:bg-slate-900">
+                  All Projects
+                </option>
+                {projects.map((p) => (
+                  <option
+                    key={p.id}
+                    value={p.id}
+                    className="bg-white dark:bg-slate-900"
+                  >
+                    {p.name}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Assignee</label>
-              <select 
-                value={assigneeFilter} 
-                onChange={e => { setAssigneeFilter(e.target.value); setCurrentPage(1); }}
-                className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 rounded-xl text-xs font-bold border-none outline-none focus:ring-2 focus:ring-primary/20 appearance-none dark:text-white"
+              <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
+                Assignee
+              </label>
+              <select
+                value={assigneeFilter}
+                onChange={(e) => {
+                  setAssigneeFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full h-12 px-4 bg-gray-50 dark:bg-slate-900 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/20 appearance-none text-text-primary dark:text-white dark:[color-scheme:dark]"
               >
-                <option value="all">All Members</option>
-                {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                <option value="all" className="bg-white dark:bg-slate-900">
+                  All Members
+                </option>
+                {employees.map((emp) => (
+                  <option
+                    key={emp.id}
+                    value={emp.id}
+                    className="bg-white dark:bg-slate-900"
+                  >
+                    {emp.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -691,154 +885,194 @@ const Tasks: React.FC = () => {
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map(i => <div key={i} className="skeleton h-[600px] rounded-[40px]" />)}
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="skeleton h-[600px] rounded-[40px]" />
+          ))}
         </div>
-      ) : view === 'kanban' ? (
+      ) : view === "kanban" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-start">
-          {columns.map(col => (
-            <div key={col.id} className={`rounded-[40px] p-2 transition-colors ${col.zone} min-h-[700px]`}>
+          {columns.map((col) => (
+            <div
+              key={col.id}
+              className={`rounded-[40px] p-2 transition-colors ${col.zone} min-h-[700px]`}
+            >
               <div className="flex items-center justify-between p-6 mb-2">
                 <div className="flex items-center space-x-3">
-                  <div className={`w-2 h-2 rounded-full ${col.color.replace('text', 'bg')}`} />
-                  <h3 className="font-black text-xs text-text-secondary uppercase tracking-[0.2em]">{col.title}</h3>
+                  <div
+                    className={`w-2 h-2 rounded-full ${col.color.replace("text", "bg")}`}
+                  />
+                  <h3 className="font-black text-xs text-text-secondary uppercase tracking-[0.2em]">
+                    {col.title}
+                  </h3>
                 </div>
                 <span className="text-[10px] font-black bg-white/80 dark:bg-white/10 px-2.5 py-1 rounded-lg text-text-muted shadow-sm ring-1 ring-black/5 dark:ring-white/5">
-                  {filteredTasks.filter(t => t.status === col.id).length}
+                  {filteredTasks.filter((t) => t.status === col.id).length}
                 </span>
               </div>
 
               <div className="space-y-5 px-2 pb-6">
-                {filteredTasks.filter(t => t.status === col.id).map(task => (
-                  <div
-                    key={task.id}
-                    onClick={() => setSelectedTask(task)}
-                    className={`group bg-white dark:bg-glass p-6 rounded-[32px] shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all cursor-pointer border-2 ${task.active_session_id ? 'border-primary/40 ring-4 ring-primary/5' : 'border-transparent hover:border-primary/10'}`}
-                  >
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex flex-col space-y-1">
-                        <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/5 px-2.5 py-1.5 rounded-xl w-fit">
-                          {task.project_name}
-                        </span>
-                        <div className="flex items-center space-x-1.5 text-[10px] font-black text-text-muted bg-gray-50 dark:bg-white/5 px-2 py-1 rounded-lg border border-gray-100 dark:border-white/5 group-hover:border-primary/20 transition-colors">
-                          <Link className="w-2.5 h-2.5 text-primary/60" />
-                          <span className="tracking-tighter">
-                            {task.task_code}
+                {filteredTasks
+                  .filter((t) => t.status === col.id)
+                  .map((task) => (
+                    <div
+                      key={task.id}
+                      onClick={() => setSelectedTask(task)}
+                      className={`group bg-white dark:bg-glass p-6 rounded-[32px] shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all cursor-pointer border-2 ${task.active_session_id ? "border-primary/40 ring-4 ring-primary/5" : "border-transparent hover:border-primary/10"}`}
+                    >
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex flex-col space-y-1">
+                          <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/5 px-2.5 py-1.5 rounded-xl w-fit">
+                            {task.project_name}
                           </span>
+                          <div className="flex items-center space-x-1.5 text-[10px] font-black text-text-muted bg-gray-50 dark:bg-white/5 px-2 py-1 rounded-lg border border-gray-100 dark:border-white/5 group-hover:border-primary/20 transition-colors">
+                            <Link className="w-2.5 h-2.5 text-primary/60" />
+                            <span className="tracking-tighter">
+                              {task.task_code}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <PriorityBadge priority={task.priority} />
-                        <div className="relative">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenMenuId(openMenuId === task.id ? null : task.id);
-                            }}
-                            className={`p-1.5 rounded-lg text-text-muted transition-all ${openMenuId === task.id ? 'bg-gray-100 text-primary' : 'hover:bg-gray-100'}`}
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
-                          {openMenuId === task.id && (
-                            <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-glass rounded-xl shadow-xl border border-gray-100 dark:border-white/10 py-1 z-[100] animate-in fade-in zoom-in duration-150">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedTask(task);
-                                  setShowEditModal(true);
-                                  setOpenMenuId(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-xs font-bold text-text-secondary hover:bg-primary/5 hover:text-primary transition-all"
-                              >
-                                Edit Task
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setTaskToDelete(task.id);
-                                  setShowDeleteModal(true);
-                                  setOpenMenuId(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-xs font-bold text-danger hover:bg-danger/5 transition-all"
-                              >
-                                Delete Task
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <h4 className="font-bold text-base text-text-primary mb-3 group-hover:text-primary transition-colors line-clamp-2 leading-snug">
-                      {task.title}
-                    </h4>
-
-                    {task.is_paused_by_break && (
-                      <div className="mb-4 py-2 px-4 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-[10px] font-black rounded-xl text-center uppercase tracking-widest border border-amber-200 dark:border-amber-900/30 animate-pulse">
-                        ⏸ Timer Frozen (Break)
-                      </div>
-                    )}
-
-                    {!task.is_approved && (
-                      <div className="mb-4 space-y-2">
-                        {user?.role === 'admin' ? (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); approveTask(task.id); }}
-                              className="flex-1 py-2 px-4 bg-success/10 text-success text-xs font-black rounded-xl hover:bg-success hover:text-white transition-all uppercase tracking-widest"
-                            >
-                              ✓ Approve
-                            </button>
+                        <div className="flex items-center space-x-2">
+                          <PriorityBadge priority={task.priority} />
+                          <div className="relative">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const reason = prompt('Reason for rejection:');
-                                if (reason) rejectTask(task.id, reason);
+                                setOpenMenuId(
+                                  openMenuId === task.id ? null : task.id,
+                                );
                               }}
-                              className="flex-1 py-2 px-4 bg-danger/10 text-danger text-xs font-black rounded-xl hover:bg-danger hover:text-white transition-all uppercase tracking-widest"
+                              className={`p-1.5 rounded-lg text-text-muted transition-all ${openMenuId === task.id ? "bg-gray-100 text-primary" : "hover:bg-gray-100"}`}
                             >
-                              ✕ Reject
+                              <MoreVertical className="w-4 h-4" />
                             </button>
+                            {openMenuId === task.id && (
+                              <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-glass rounded-xl shadow-xl border border-gray-100 dark:border-white/10 py-1 z-[100] animate-in fade-in zoom-in duration-150">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedTask(task);
+                                    setShowEditModal(true);
+                                    setOpenMenuId(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-xs font-bold text-text-secondary hover:bg-primary/5 hover:text-primary transition-all"
+                                >
+                                  Edit Task
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setTaskToDelete(task.id);
+                                    setShowDeleteModal(true);
+                                    setOpenMenuId(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-xs font-bold text-danger hover:bg-danger/5 transition-all"
+                                >
+                                  Delete Task
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        ) : (
-                          <div className="py-2 px-4 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-[10px] font-black rounded-xl text-center uppercase tracking-widest border border-amber-200 dark:border-amber-900/30">
-                            {task.rejection_reason ? '❌ Task Rejected' : '⏳ Awaiting Admin Approval'}
-                          </div>
-                        )}
-                        {task.rejection_reason && (
-                          <div className="p-3 bg-danger/5 text-danger text-[10px] font-bold rounded-xl border border-danger/10">
-                            Reason: {task.rejection_reason}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between mt-auto">
-                      <div className="flex items-center space-x-3">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); toggleTimer(task.id, !!task.active_session_id); }}
-                          disabled={!task.is_approved}
-                          className={`p-2.5 rounded-xl transition-all ${!task.is_approved
-                              ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
-                              : task.active_session_id
-                                ? 'bg-danger text-white animate-pulse'
-                                : 'bg-gray-50 text-gray-400 group-hover:bg-primary/10 group-hover:text-primary'
-                            }`}
-                        >
-                          {task.active_session_id ? <TimerIcon className="w-4 h-4 animate-spin-slow" /> : <Play className="w-4 h-4 fill-current" />}
-                        </button>
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-black text-text-muted uppercase tracking-tighter">Time Tracked</span>
-                          <span className="text-xs font-bold text-text-primary">
-                            {task.active_session_id && task.active_session_start ? (
-                              <LiveTimer start={task.active_session_start} baseMinutes={task.total_minutes_logged} />
-                            ) : formatMinutes(task.total_minutes_logged)}
-                          </span>
                         </div>
                       </div>
-                      <Avatar name={task.assignee_name || ''} size="xs" className="ring-2 ring-white shadow-sm" />
+
+                      <h4 className="font-bold text-base text-text-primary mb-3 group-hover:text-primary transition-colors line-clamp-2 leading-snug">
+                        {task.title}
+                      </h4>
+
+                      {task.is_paused_by_break && (
+                        <div className="mb-4 py-2 px-4 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-[10px] font-black rounded-xl text-center uppercase tracking-widest border border-amber-200 dark:border-amber-900/30 animate-pulse">
+                          ⏸ Timer Frozen (Break)
+                        </div>
+                      )}
+
+                      {!task.is_approved && (
+                        <div className="mb-4 space-y-2">
+                          {user?.role === "admin" ? (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  approveTask(task.id);
+                                }}
+                                className="flex-1 py-2 px-4 bg-success/10 text-success text-xs font-black rounded-xl hover:bg-success hover:text-white transition-all uppercase tracking-widest"
+                              >
+                                ✓ Approve
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const reason = prompt(
+                                    "Reason for rejection:",
+                                  );
+                                  if (reason) rejectTask(task.id, reason);
+                                }}
+                                className="flex-1 py-2 px-4 bg-danger/10 text-danger text-xs font-black rounded-xl hover:bg-danger hover:text-white transition-all uppercase tracking-widest"
+                              >
+                                ✕ Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="py-2 px-4 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-[10px] font-black rounded-xl text-center uppercase tracking-widest border border-amber-200 dark:border-amber-900/30">
+                              {task.rejection_reason
+                                ? "❌ Task Rejected"
+                                : "⏳ Awaiting Admin Approval"}
+                            </div>
+                          )}
+                          {task.rejection_reason && (
+                            <div className="p-3 bg-danger/5 text-danger text-[10px] font-bold rounded-xl border border-danger/10">
+                              Reason: {task.rejection_reason}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between mt-auto">
+                        <div className="flex items-center space-x-3">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleTimer(task.id, !!task.active_session_id);
+                            }}
+                            disabled={!task.is_approved}
+                            className={`p-2.5 rounded-xl transition-all ${
+                              !task.is_approved
+                                ? "bg-gray-100 text-gray-300 cursor-not-allowed"
+                                : task.active_session_id
+                                  ? "bg-danger text-white animate-pulse"
+                                  : "bg-gray-50 text-gray-400 group-hover:bg-primary/10 group-hover:text-primary"
+                            }`}
+                          >
+                            {task.active_session_id ? (
+                              <TimerIcon className="w-4 h-4 animate-spin-slow" />
+                            ) : (
+                              <Play className="w-4 h-4 fill-current" />
+                            )}
+                          </button>
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-black text-text-muted uppercase tracking-tighter">
+                              Time Tracked
+                            </span>
+                            <span className="text-xs font-bold text-text-primary">
+                              {task.active_session_id &&
+                              task.active_session_start ? (
+                                <LiveTimer
+                                  start={task.active_session_start}
+                                  baseMinutes={task.total_minutes_logged}
+                                />
+                              ) : (
+                                formatMinutes(task.total_minutes_logged)
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                        <Avatar
+                          name={task.assignee_name || ""}
+                          size="xs"
+                          className="ring-2 ring-white shadow-sm"
+                        />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           ))}
@@ -846,156 +1080,195 @@ const Tasks: React.FC = () => {
       ) : (
         <>
           <div className="glass rounded-[40px] border-none shadow-sm bg-white/40 dark:bg-white/5">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-white/20 text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
-                <th className="px-8 py-6">Task Identity</th>
-                <th className="px-8 py-6">Progress Zone</th>
-                <th className="px-8 py-6">Tracked / Estimated</th>
-                <th className="px-8 py-6">Team Lead</th>
-                <th className="px-8 py-6 text-center">Execution</th>
-                <th className="px-8 py-6"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentTasks.map(task => (
-                <tr
-                  key={task.id}
-                  onClick={() => setSelectedTask(task)}
-                  className={`border-b border-white/10 hover:bg-white/60 transition-all cursor-pointer group ${task.active_session_id ? 'bg-primary/5' : ''}`}
-                >
-                  <td className="px-8 py-6">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-black text-text-primary group-hover:text-primary transition-colors">{task.title}</span>
-                      <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest mt-1">{task.project_name}</span>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6">
-                    <StatusBadge status={task.status} />
-                  </td>
-                  <td className="px-8 py-6">
-                    <div className="flex items-center space-x-3">
-                      <span className="text-xs font-black text-primary">
-                        {task.active_session_id && task.active_session_start ? (
-                          <LiveTimer start={task.active_session_start} baseMinutes={task.total_minutes_logged} />
-                        ) : formatMinutes(task.total_minutes_logged)}
-                      </span>
-                      <span className="text-[10px] text-text-muted font-bold">/ {task.estimated_hours}h</span>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6">
-                    <div className="flex items-center space-x-3">
-                      <Avatar name={task.assignee_name} size="xs" />
-                      <span className="text-xs font-bold text-text-secondary">{task.assignee_name}</span>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6 text-center">
-                    {!task.is_approved ? (
-                      <div className="flex flex-col items-center">
-                        <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-lg uppercase tracking-tighter">Awaiting Approval</span>
-                        {user?.role === 'admin' && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); approveTask(task.id); }}
-                            className="mt-2 text-[10px] font-black text-success hover:underline"
-                          >
-                            Approve Now
-                          </button>
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-white/20 text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
+                  <th className="px-8 py-6">Task Identity</th>
+                  <th className="px-8 py-6">Progress Zone</th>
+                  <th className="px-8 py-6">Tracked / Estimated</th>
+                  <th className="px-8 py-6">Team Lead</th>
+                  <th className="px-8 py-6 text-center">Execution</th>
+                  <th className="px-8 py-6"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentTasks.map((task) => (
+                  <tr
+                    key={task.id}
+                    onClick={() => setSelectedTask(task)}
+                    className={`border-b border-white/10 hover:bg-white/60 transition-all cursor-pointer group ${task.active_session_id ? "bg-primary/5" : ""}`}
+                  >
+                    <td className="px-8 py-6">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-black text-text-primary group-hover:text-primary transition-colors">
+                          {task.title}
+                        </span>
+                        <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest mt-1">
+                          {task.project_name}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <StatusBadge status={task.status} />
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center space-x-3">
+                        <span className="text-xs font-black text-primary">
+                          {task.active_session_id &&
+                          task.active_session_start ? (
+                            <LiveTimer
+                              start={task.active_session_start}
+                              baseMinutes={task.total_minutes_logged}
+                            />
+                          ) : (
+                            formatMinutes(task.total_minutes_logged)
+                          )}
+                        </span>
+                        <span className="text-[10px] text-text-muted font-bold">
+                          / {task.estimated_hours}h
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center space-x-3">
+                        <Avatar name={task.assignee_name} size="xs" />
+                        <span className="text-xs font-bold text-text-secondary">
+                          {task.assignee_name}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6 text-center">
+                      {!task.is_approved ? (
+                        <div className="flex flex-col items-center">
+                          <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-lg uppercase tracking-tighter">
+                            Awaiting Approval
+                          </span>
+                          {user?.role === "admin" && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                approveTask(task.id);
+                              }}
+                              className="mt-2 text-[10px] font-black text-success hover:underline"
+                            >
+                              Approve Now
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleTimer(task.id, !!task.active_session_id);
+                          }}
+                          className={`p-3 rounded-xl transition-all shadow-sm ${
+                            task.active_session_id
+                              ? "bg-danger text-white hover:bg-danger-hover"
+                              : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
+                          }`}
+                        >
+                          {task.active_session_id ? (
+                            <Square className="w-4 h-4 fill-current" />
+                          ) : (
+                            <Play className="w-4 h-4 fill-current" />
+                          )}
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-8 py-6 text-right">
+                      <div className="relative inline-block text-left">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(
+                              openMenuId === task.id ? null : task.id,
+                            );
+                          }}
+                          className={`p-2 rounded-lg text-text-muted transition-all ${openMenuId === task.id ? "bg-gray-100 text-primary" : "hover:bg-gray-100"}`}
+                        >
+                          <MoreVertical className="w-5 h-5" />
+                        </button>
+                        {openMenuId === task.id && (
+                          <div className="absolute right-full mr-2 top-0 w-48 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-gray-100 py-2 z-[100] animate-in slide-in-from-right-2 fade-in duration-200">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedTask(task);
+                                setShowEditModal(true);
+                                setOpenMenuId(null);
+                              }}
+                              className="w-full text-left px-5 py-3 text-sm font-bold text-text-secondary hover:bg-primary/5 hover:text-primary transition-all flex items-center"
+                            >
+                              <Layout className="w-4 h-4 mr-3" />
+                              Edit Task
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTaskToDelete(task.id);
+                                setShowDeleteModal(true);
+                                setOpenMenuId(null);
+                              }}
+                              className="w-full text-left px-5 py-3 text-sm font-bold text-danger hover:bg-danger/5 transition-all flex items-center"
+                            >
+                              <Trash2 className="w-4 h-4 mr-3" />
+                              Delete Task
+                            </button>
+                          </div>
                         )}
                       </div>
-                    ) : (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleTimer(task.id, !!task.active_session_id); }}
-                        className={`p-3 rounded-xl transition-all shadow-sm ${task.active_session_id
-                            ? 'bg-danger text-white hover:bg-danger-hover'
-                            : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'
-                          }`}
-                      >
-                        {task.active_session_id ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
-                      </button>
-                    )}
-                  </td>
-                  <td className="px-8 py-6 text-right">
-                    <div className="relative inline-block text-left">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenMenuId(openMenuId === task.id ? null : task.id);
-                        }}
-                        className={`p-2 rounded-lg text-text-muted transition-all ${openMenuId === task.id ? 'bg-gray-100 text-primary' : 'hover:bg-gray-100'}`}
-                      >
-                        <MoreVertical className="w-5 h-5" />
-                      </button>
-                      {openMenuId === task.id && (
-                        <div className="absolute right-full mr-2 top-0 w-48 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-gray-100 py-2 z-[100] animate-in slide-in-from-right-2 fade-in duration-200">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedTask(task);
-                              setShowEditModal(true);
-                              setOpenMenuId(null);
-                            }}
-                            className="w-full text-left px-5 py-3 text-sm font-bold text-text-secondary hover:bg-primary/5 hover:text-primary transition-all flex items-center"
-                          >
-                            <Layout className="w-4 h-4 mr-3" />
-                            Edit Task
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setTaskToDelete(task.id);
-                              setShowDeleteModal(true);
-                              setOpenMenuId(null);
-                            }}
-                            className="w-full text-left px-5 py-3 text-sm font-bold text-danger hover:bg-danger/5 transition-all flex items-center"
-                          >
-                            <Trash2 className="w-4 h-4 mr-3" />
-                            Delete Task
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
 
           {/* Pagination Controls */}
-          {view === 'list' && totalPages > 1 && (
-        <div className="flex items-center justify-between px-8 py-6 bg-white dark:bg-glass rounded-[32px] shadow-sm border border-gray-100 dark:border-white/10 mt-6">
-          <p className="text-xs font-black text-text-muted uppercase tracking-widest">
-            Showing <span className="text-primary">{indexOfFirstTask + 1}</span> to <span className="text-primary">{Math.min(indexOfLastTask, filteredTasks.length)}</span> of <span className="text-primary">{filteredTasks.length}</span> tasks
-          </p>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/5 text-text-muted hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            >
-              <ChevronRight className="w-5 h-5 rotate-180" />
-            </button>
-            <div className="flex items-center space-x-1">
-              {[...Array(totalPages)].map((_, i) => (
+          {view === "list" && totalPages > 1 && (
+            <div className="flex items-center justify-between px-8 py-6 bg-white dark:bg-glass rounded-[32px] shadow-sm border border-gray-100 dark:border-white/10 mt-6">
+              <p className="text-xs font-black text-text-muted uppercase tracking-widest">
+                Showing{" "}
+                <span className="text-primary">{indexOfFirstTask + 1}</span> to{" "}
+                <span className="text-primary">
+                  {Math.min(indexOfLastTask, filteredTasks.length)}
+                </span>{" "}
+                of <span className="text-primary">{filteredTasks.length}</span>{" "}
+                tasks
+              </p>
+              <div className="flex items-center space-x-2">
                 <button
-                  key={i}
-                  onClick={() => setCurrentPage(i + 1)}
-                  className={`w-10 h-10 rounded-xl text-xs font-black transition-all ${currentPage === i + 1 ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-gray-50 dark:bg-white/5 text-text-muted hover:bg-gray-100'}`}
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.max(prev - 1, 1))
+                  }
+                  disabled={currentPage === 1}
+                  className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/5 text-text-muted hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 >
-                  {i + 1}
+                  <ChevronRight className="w-5 h-5 rotate-180" />
                 </button>
-              ))}
+                <div className="flex items-center space-x-1">
+                  {[...Array(totalPages)].map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setCurrentPage(i + 1)}
+                      className={`w-10 h-10 rounded-xl text-xs font-black transition-all ${currentPage === i + 1 ? "bg-primary text-white shadow-lg shadow-primary/20" : "bg-gray-50 dark:bg-white/5 text-text-muted hover:bg-gray-100"}`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                  }
+                  disabled={currentPage === totalPages}
+                  className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/5 text-text-muted hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
-              className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/5 text-text-muted hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      )}
+          )}
         </>
       )}
 
@@ -1004,11 +1277,16 @@ const Tasks: React.FC = () => {
           <div className="bg-white dark:bg-background h-full w-full max-w-2xl shadow-2xl animate-in slide-in-from-right duration-500 overflow-y-auto">
             <div className="sticky top-0 z-10 bg-white/80 dark:bg-background/80 backdrop-blur-md p-8 border-b border-gray-100 dark:border-white/5 flex justify-between items-center">
               <div className="flex items-center space-x-4">
-                <button onClick={() => setSelectedTask(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-xl transition-colors">
+                <button
+                  onClick={() => setSelectedTask(null)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-xl transition-colors"
+                >
                   <X className="w-6 h-6 text-text-muted" />
                 </button>
                 <div className="h-8 w-px bg-gray-200 dark:bg-white/10" />
-                <span className="text-xs font-black text-text-muted uppercase tracking-widest">{selectedTask.project_name}</span>
+                <span className="text-xs font-black text-text-muted uppercase tracking-widest">
+                  {selectedTask.project_name}
+                </span>
               </div>
               <div className="flex items-center space-x-3">
                 <button className="btn-secondary h-11 px-5 border-none bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 font-bold text-xs">
@@ -1022,70 +1300,117 @@ const Tasks: React.FC = () => {
               <div className="space-y-4">
                 <div className="flex items-center space-x-3">
                   <PriorityBadge priority={selectedTask.priority} />
-                  <span className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Task {selectedTask.task_code || `#${selectedTask.id.slice(0, 8)}`}</span>
+                  <span className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
+                    Task{" "}
+                    {selectedTask.task_code ||
+                      `#${selectedTask.id.slice(0, 8)}`}
+                  </span>
                 </div>
-                <h2 className="text-4xl font-black text-text-primary leading-tight">{selectedTask.title}</h2>
+                <h2 className="text-4xl font-black text-text-primary leading-tight">
+                  {selectedTask.title}
+                </h2>
               </div>
 
               <div className="grid grid-cols-2 gap-12 py-8 border-y border-gray-100 dark:border-white/5">
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest">Zone Status</label>
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest">
+                    Zone Status
+                  </label>
                   <select
                     value={selectedTask.status}
-                    onChange={(e) => updateStatus(selectedTask.id, e.target.value)}
+                    onChange={(e) =>
+                      updateStatus(selectedTask.id, e.target.value)
+                    }
                     className="w-full h-14 px-5 bg-gray-50 dark:bg-white/5 rounded-2xl font-black text-xs uppercase tracking-widest outline-none ring-primary/10 focus:ring-4 transition-all appearance-none cursor-pointer border-none text-text-primary dark:text-white"
                   >
-                    <option value="todo" className="dark:bg-slate-900">To Do</option>
-                    <option value="in_progress" className="dark:bg-slate-900">In Progress</option>
-                    <option value="review" className="dark:bg-slate-900">Review</option>
-                    <option value="done" className="dark:bg-slate-900">Done</option>
+                    <option value="todo" className="dark:bg-slate-900">
+                      To Do
+                    </option>
+                    <option value="in_progress" className="dark:bg-slate-900">
+                      In Progress
+                    </option>
+                    <option value="review" className="dark:bg-slate-900">
+                      Review
+                    </option>
+                    <option value="done" className="dark:bg-slate-900">
+                      Done
+                    </option>
                   </select>
                 </div>
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest">Assigned To</label>
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest">
+                    Assigned To
+                  </label>
                   <div className="flex items-center space-x-4 h-14 px-5 bg-gray-50 dark:bg-white/5 rounded-2xl">
                     <Avatar name={selectedTask.assignee_name} size="xs" />
-                    <span className="text-sm font-bold text-text-primary">{selectedTask.assignee_name}</span>
+                    <span className="text-sm font-bold text-text-primary">
+                      {selectedTask.assignee_name}
+                    </span>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-6">
-                <h3 className="text-xs font-black text-text-muted uppercase tracking-widest">Mission Description</h3>
+                <h3 className="text-xs font-black text-text-muted uppercase tracking-widest">
+                  Mission Description
+                </h3>
                 <div className="bg-gray-50 dark:bg-white/5 p-8 rounded-[32px] text-text-secondary dark:text-white/60 leading-relaxed font-medium whitespace-pre-wrap">
-                  {selectedTask.description || 'No description provided for this mission.'}
+                  {selectedTask.description ||
+                    "No description provided for this mission."}
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-8">
                 <div className="p-6 bg-primary/5 rounded-[24px] space-y-2">
                   <Clock className="w-5 h-5 text-primary mb-3" />
-                  <p className="text-[10px] font-black text-primary/60 uppercase tracking-widest">Time Logged</p>
+                  <p className="text-[10px] font-black text-primary/60 uppercase tracking-widest">
+                    Time Logged
+                  </p>
                   <p className="text-xl font-black text-primary">
-                    {selectedTask.active_session_id && selectedTask.active_session_start ? (
-                      <LiveTimer start={selectedTask.active_session_start} baseMinutes={selectedTask.total_minutes_logged} />
-                    ) : formatMinutes(selectedTask.total_minutes_logged)}
+                    {selectedTask.active_session_id &&
+                    selectedTask.active_session_start ? (
+                      <LiveTimer
+                        start={selectedTask.active_session_start}
+                        baseMinutes={selectedTask.total_minutes_logged}
+                      />
+                    ) : (
+                      formatMinutes(selectedTask.total_minutes_logged)
+                    )}
                   </p>
                 </div>
                 <div className="p-6 bg-indigo-50 dark:bg-indigo-900/20 rounded-[24px] space-y-2">
                   <TimerIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mb-3" />
-                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Estimation</p>
-                  <p className="text-xl font-black text-indigo-600 dark:text-indigo-300">{selectedTask.estimated_hours}h</p>
+                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">
+                    Estimation
+                  </p>
+                  <p className="text-xl font-black text-indigo-600 dark:text-indigo-300">
+                    {selectedTask.estimated_hours}h
+                  </p>
                 </div>
                 <div className="p-6 bg-emerald-50 dark:bg-emerald-900/20 rounded-[24px] space-y-2">
                   <Calendar className="w-5 h-5 text-emerald-600 dark:text-emerald-400 mb-3" />
-                  <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Due Date</p>
-                  <p className="text-xl font-black text-emerald-600 dark:text-emerald-300">{new Date(selectedTask.due_date).toLocaleDateString()}</p>
+                  <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">
+                    Due Date
+                  </p>
+                  <p className="text-xl font-black text-emerald-600 dark:text-emerald-300">
+                    {new Date(selectedTask.due_date).toLocaleDateString()}
+                  </p>
                 </div>
               </div>
 
               <div className="pt-8">
                 <button
-                  onClick={() => toggleTimer(selectedTask.id, !!selectedTask.active_session_id)}
-                  className={`w-full h-16 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center space-x-4 shadow-xl transition-all active:scale-95 ${selectedTask.active_session_id
-                      ? 'bg-danger text-white shadow-danger/25'
-                      : 'bg-primary text-white shadow-primary/25'
-                    }`}
+                  onClick={() =>
+                    toggleTimer(
+                      selectedTask.id,
+                      !!selectedTask.active_session_id,
+                    )
+                  }
+                  className={`w-full h-16 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center space-x-4 shadow-xl transition-all active:scale-95 ${
+                    selectedTask.active_session_id
+                      ? "bg-danger text-white shadow-danger/25"
+                      : "bg-primary text-white shadow-primary/25"
+                  }`}
                 >
                   {selectedTask.active_session_id ? (
                     <>
@@ -1110,42 +1435,84 @@ const Tasks: React.FC = () => {
           <div className="bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-2xl rounded-[40px] shadow-modal animate-in zoom-in duration-300 overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-8 border-b border-gray-100 dark:border-white/10 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
               <div>
-                <h3 className="text-xl font-black text-text-primary tracking-tight">New Mission</h3>
-                <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mt-1">Initialize a new task in the sprint</p>
+                <h3 className="text-xl font-black text-text-primary tracking-tight">
+                  New Mission
+                </h3>
+                <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mt-1">
+                  Initialize a new task in the sprint
+                </p>
               </div>
-              <button onClick={() => setShowCreateModal(false)} className="w-10 h-10 flex items-center justify-center bg-white dark:bg-white/10 rounded-xl shadow-sm hover:text-danger transition-colors text-text-primary"><X className="w-5 h-5" /></button>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="w-10 h-10 flex items-center justify-center bg-white dark:bg-white/10 rounded-xl shadow-sm hover:text-danger transition-colors text-text-primary"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             <div className="overflow-y-auto flex-1">
               <form onSubmit={handleCreate} className="p-10 space-y-6">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Mission Title</label>
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
+                    Mission Title
+                  </label>
                   <input
-                    type="text" required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold"
+                    type="text"
+                    required
+                    className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold"
                     placeholder="e.g. Design System Implementation"
-                    value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
+                    value={form.title}
+                    onChange={(e) =>
+                      setForm({ ...form, title: e.target.value })
+                    }
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Project</label>
+                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
+                      Project
+                    </label>
                     <select
-                      required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
-                      value={form.project_id} onChange={e => setForm({ ...form, project_id: e.target.value })}
+                      required
+                      className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
+                      value={form.project_id}
+                      onChange={(e) =>
+                        setForm({ ...form, project_id: e.target.value })
+                      }
                     >
-                      <option value="" className="dark:bg-slate-800">Select Project</option>
-                      {projects.map(p => <option key={p.id} value={p.id} className="dark:bg-slate-800">{p.name}</option>)}
+                      <option value="" className="dark:bg-slate-800">
+                        Select Project
+                      </option>
+                      {projects.map((p) => (
+                        <option
+                          key={p.id}
+                          value={p.id}
+                          className="dark:bg-slate-800"
+                        >
+                          {p.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Est. Hours</label>
+                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
+                      Est. Hours
+                    </label>
                     <input
-                      type="number" step="0.5" min="0" required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold dark:text-white"
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      required
+                      className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold dark:text-white"
                       placeholder="e.g. 4.5"
-                      value={form.estimated_hours} onChange={e => {
+                      value={form.estimated_hours}
+                      onChange={(e) => {
                         const val = parseFloat(e.target.value);
-                        setForm({ ...form, estimated_hours: isNaN(val) ? 0 : Math.max(0, val) });
+                        setForm({
+                          ...form,
+                          estimated_hours: isNaN(val) ? 0 : Math.max(0, val),
+                        });
                       }}
                     />
                   </div>
@@ -1153,34 +1520,68 @@ const Tasks: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Lead Assigned</label>
+                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
+                      Lead Assigned
+                    </label>
                     <select
-                      required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
-                      value={form.assigned_to} onChange={e => setForm({ ...form, assigned_to: e.target.value })}
+                      required
+                      className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
+                      value={form.assigned_to}
+                      onChange={(e) =>
+                        setForm({ ...form, assigned_to: e.target.value })
+                      }
                     >
-                      <option value="" className="dark:bg-slate-800">Select Team Member</option>
-                      {employees.map(e => <option key={e.id} value={e.id} className="dark:bg-slate-800">{e.name}</option>)}
+                      <option value="" className="dark:bg-slate-800">
+                        Select Team Member
+                      </option>
+                      {employees.map((e) => (
+                        <option
+                          key={e.id}
+                          value={e.id}
+                          className="dark:bg-slate-800"
+                        >
+                          {e.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Priority</label>
+                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
+                      Priority
+                    </label>
                     <select
                       className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
-                      value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
+                      value={form.priority}
+                      onChange={(e) =>
+                        setForm({ ...form, priority: e.target.value })
+                      }
                     >
-                      <option value="low" className="dark:bg-slate-800">Low Priority</option>
-                      <option value="medium" className="dark:bg-slate-800">Medium Priority</option>
-                      <option value="high" className="dark:bg-slate-800">High Priority</option>
+                      <option value="low" className="dark:bg-slate-800">
+                        Low Priority
+                      </option>
+                      <option value="medium" className="dark:bg-slate-800">
+                        Medium Priority
+                      </option>
+                      <option value="high" className="dark:bg-slate-800">
+                        High Priority
+                      </option>
                     </select>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Deadline</label>
+                    <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
+                      Deadline
+                    </label>
                     <input
-                      type="date" required className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold"
-                      value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })}
+                      type="date"
+                      required
+                      className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold"
+                      value={form.due_date}
+                      onChange={(e) =>
+                        setForm({ ...form, due_date: e.target.value })
+                      }
                     />
                   </div>
                   <div className="flex items-end pb-1">
@@ -1192,17 +1593,33 @@ const Tasks: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Mission Briefing</label>
+                  <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
+                    Mission Briefing
+                  </label>
                   <textarea
                     className="input min-h-[100px] p-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-medium leading-relaxed"
                     placeholder="Define the objectives and requirements..."
-                    value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
+                    value={form.description}
+                    onChange={(e) =>
+                      setForm({ ...form, description: e.target.value })
+                    }
                   />
                 </div>
 
                 <div className="flex justify-end space-x-4 pt-4">
-                  <button type="button" onClick={() => setShowCreateModal(false)} className="h-12 px-6 rounded-xl font-bold text-sm text-text-muted hover:bg-gray-100 transition-all">Discard</button>
-                  <button type="submit" className="h-12 px-10 bg-primary text-white font-black rounded-xl shadow-lg shadow-primary/25 hover:scale-[1.02] active:scale-[0.98] transition-all">Launch Task</button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="h-12 px-6 rounded-xl font-bold text-sm text-text-muted hover:bg-gray-100 transition-all"
+                  >
+                    Discard
+                  </button>
+                  <button
+                    type="submit"
+                    className="h-12 px-10 bg-primary text-white font-black rounded-xl shadow-lg shadow-primary/25 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                  >
+                    Launch Task
+                  </button>
                 </div>
               </form>
             </div>
@@ -1213,30 +1630,58 @@ const Tasks: React.FC = () => {
       {/* Edit Task Modal */}
       {showEditModal && selectedTask && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowEditModal(false)} />
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setShowEditModal(false)}
+          />
           <div className="relative bg-white w-full max-w-xl rounded-[40px] p-10 shadow-2xl animate-scale-up">
-            <h2 className="text-3xl font-black text-text-primary mb-8">Edit Task</h2>
+            <h2 className="text-3xl font-black text-text-primary mb-8">
+              Edit Task
+            </h2>
             <form onSubmit={handleUpdateTask} className="space-y-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Task Title</label>
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
+                  Task Title
+                </label>
                 <input
-                  type="text" required
+                  type="text"
+                  required
                   className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all"
                   value={selectedTask.title}
-                  onChange={(e) => setSelectedTask({ ...selectedTask, title: e.target.value })}
+                  onChange={(e) =>
+                    setSelectedTask({ ...selectedTask, title: e.target.value })
+                  }
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Description</label>
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
+                  Description
+                </label>
                 <textarea
                   className="w-full h-32 px-6 py-4 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all resize-none"
                   value={selectedTask.description}
-                  onChange={(e) => setSelectedTask({ ...selectedTask, description: e.target.value })}
+                  onChange={(e) =>
+                    setSelectedTask({
+                      ...selectedTask,
+                      description: e.target.value,
+                    })
+                  }
                 />
               </div>
               <div className="flex gap-4 pt-4">
-                <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 h-14 rounded-2xl font-bold text-text-secondary hover:bg-gray-100 transition-all">Cancel</button>
-                <button type="submit" className="flex-1 h-14 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all">Save Changes</button>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 h-14 rounded-2xl font-bold text-text-secondary hover:bg-gray-100 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 h-14 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
+                >
+                  Save Changes
+                </button>
               </div>
             </form>
           </div>
@@ -1246,16 +1691,34 @@ const Tasks: React.FC = () => {
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setShowDeleteModal(false)}
+          />
           <div className="relative bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl animate-scale-up text-center">
             <div className="w-20 h-20 bg-danger/10 rounded-full flex items-center justify-center mx-auto mb-6">
               <Trash2 className="w-10 h-10 text-danger" />
             </div>
-            <h2 className="text-2xl font-black text-text-primary mb-2">Are you sure?</h2>
-            <p className="text-text-muted font-medium mb-8 text-sm">This action cannot be undone. This task will be permanently deleted.</p>
+            <h2 className="text-2xl font-black text-text-primary mb-2">
+              Are you sure?
+            </h2>
+            <p className="text-text-muted font-medium mb-8 text-sm">
+              This action cannot be undone. This task will be permanently
+              deleted.
+            </p>
             <div className="flex flex-col gap-3">
-              <button onClick={handleDeleteTask} className="h-14 bg-danger text-white rounded-2xl font-black shadow-lg shadow-danger/20 hover:scale-[1.02] active:scale-95 transition-all">Yes, Delete Task</button>
-              <button onClick={() => setShowDeleteModal(false)} className="h-14 rounded-2xl font-bold text-text-secondary hover:bg-gray-100 transition-all">No, Keep it</button>
+              <button
+                onClick={handleDeleteTask}
+                className="h-14 bg-danger text-white rounded-2xl font-black shadow-lg shadow-danger/20 hover:scale-[1.02] active:scale-95 transition-all"
+              >
+                Yes, Delete Task
+              </button>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="h-14 rounded-2xl font-bold text-text-secondary hover:bg-gray-100 transition-all"
+              >
+                No, Keep it
+              </button>
             </div>
           </div>
         </div>

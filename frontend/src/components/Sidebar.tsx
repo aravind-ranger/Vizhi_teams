@@ -1,81 +1,179 @@
-import React, { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import React from "react";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
-  Users, Calendar, FileText, LayoutDashboard, Clock,
-  Briefcase, FastForward, MessageSquare, PieChart,
-  ChevronLeft, ChevronRight, LogOut, Sun, Moon, Video
-} from 'lucide-react';
-import { useAuthStore } from '../store/useAuthStore';
-import { useThemeStore } from '../store/useThemeStore';
-import RoleBadge from './RoleBadge';
-import Avatar from './Avatar';
+  Users,
+  Calendar,
+  FileText,
+  LayoutDashboard,
+  Clock,
+  Briefcase,
+  FastForward,
+  MessageSquare,
+  PieChart,
+  ChevronLeft,
+  ChevronRight,
+  LogOut,
+  Sun,
+  Moon,
+  Video,
+} from "lucide-react";
+import { useAuthStore } from "../store/useAuthStore";
+import { useThemeStore } from "../store/useThemeStore";
+import { useSidebarStore } from "../store/useSidebarStore";
+import { APP_VERSION } from "../config/version";
+import RoleBadge from "./RoleBadge";
+import Avatar from "./Avatar";
 
 const Sidebar: React.FC = () => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const { isCollapsed, setIsCollapsed } = useSidebarStore();
   const { user, logout } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
   const navigate = useNavigate();
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate("/login");
   };
 
   const navSections = [
     {
-      title: 'OVERVIEW',
+      title: "OVERVIEW",
       items: [
-        { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: ['admin', 'manager', 'employee'] },
-      ]
+        {
+          label: "Dashboard",
+          icon: LayoutDashboard,
+          path: "/dashboard",
+          roles: ["admin", "manager", "employee"],
+        },
+      ],
     },
     {
-      title: 'HR & PEOPLE',
+      title: "HR & PEOPLE",
       items: [
-        { label: 'Team Directory', icon: Users, path: '/employees', roles: ['admin', 'manager', 'employee'] },
-        { label: 'Attendance', icon: Clock, path: '/attendance', roles: ['admin', 'manager', 'employee'] },
-        { label: 'Leaves', icon: FileText, path: '/leaves', roles: ['admin', 'manager', 'employee'] },
-        { label: 'Calendar', icon: Calendar, path: '/calendar', roles: ['admin', 'manager', 'employee'] },
-      ]
+        {
+          label: "Team Directory",
+          icon: Users,
+          path: "/employees",
+          roles: ["admin", "manager", "employee"],
+        },
+        {
+          label: "Attendance",
+          icon: Clock,
+          path: "/attendance",
+          roles: ["admin", "manager", "employee"],
+        },
+        {
+          label: "Leaves",
+          icon: FileText,
+          path: "/leaves",
+          roles: ["admin", "manager", "employee"],
+        },
+        {
+          label: "Calendar",
+          icon: Calendar,
+          path: "/calendar",
+          roles: ["admin", "manager", "employee"],
+        },
+      ],
     },
     {
-      title: 'PROJECTS',
+      title: "PROJECTS",
       items: [
-        { label: 'Projects', icon: Briefcase, path: '/projects', roles: ['admin', 'manager', 'employee'] },
-        { label: 'All Tasks', icon: LayoutDashboard, path: '/tasks', roles: ['admin', 'manager', 'employee'] },
-        { label: 'Sprints', icon: FastForward, path: '/sprints', roles: ['admin', 'manager', 'employee'] },
-        { label: 'Meets', icon: Video, path: '/meets', roles: ['admin', 'manager', 'employee'] },
-        { label: 'Daily Scrum', icon: MessageSquare, path: '/daily-scrum', roles: ['admin', 'manager', 'employee'] },
-      ]
+        {
+          label: "Projects",
+          icon: Briefcase,
+          path: "/projects",
+          roles: ["admin", "manager", "employee"],
+        },
+        {
+          label: "All Tasks",
+          icon: LayoutDashboard,
+          path: "/tasks",
+          roles: ["admin", "manager", "employee"],
+        },
+        {
+          label: "Sprints",
+          icon: FastForward,
+          path: "/sprints",
+          roles: ["admin", "manager", "employee"],
+        },
+        {
+          label: "Meets",
+          icon: Video,
+          path: "/meets",
+          roles: ["admin", "manager", "employee"],
+        },
+        {
+          label: "Daily Scrum",
+          icon: MessageSquare,
+          path: "/daily-scrum",
+          roles: ["admin", "manager", "employee"],
+        },
+      ],
     },
     {
-      title: 'THEMES',
+      title: "THEMES",
       items: [
-        { label: 'Light Mode', icon: Sun, action: 'light', roles: ['admin', 'manager', 'employee'] },
-        { label: 'Dark Mode', icon: Moon, action: 'dark', roles: ['admin', 'manager', 'employee'] },
-      ]
+        {
+          label: "Light Mode",
+          icon: Sun,
+          action: "light",
+          roles: ["admin", "manager", "employee"],
+        },
+        {
+          label: "Dark Mode",
+          icon: Moon,
+          action: "dark",
+          roles: ["admin", "manager", "employee"],
+        },
+      ],
     },
     {
-      title: 'TOOLS',
+      title: "TOOLS",
       items: [
-        { label: 'Reports', icon: PieChart, path: '/reports', roles: ['admin', 'manager', 'employee'] },
-        { label: 'Admin Logs', icon: FileText, path: '/admin-logs', roles: ['admin'] },
-      ]
-    }
+        {
+          label: "Reports",
+          icon: PieChart,
+          path: "/reports",
+          roles: ["admin", "manager", "employee"],
+        },
+        {
+          label: "Admin Logs",
+          icon: FileText,
+          path: "/admin-logs",
+          roles: ["admin"],
+        },
+      ],
+    },
   ];
 
-  const filteredSections = navSections.map(section => ({
-    ...section,
-    items: section.items.filter(item => (item.roles || []).includes(user?.role || ''))
-  })).filter(section => section.items.length > 0);
+  const filteredSections = navSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) =>
+        (item.roles || []).includes(user?.role || ""),
+      ),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
-    <div className={`fixed left-0 top-0 h-screen bg-white dark:bg-[#0B1120] border-r border-border transition-all duration-300 ease-in-out z-30 flex flex-col ${isCollapsed ? 'w-20' : 'w-[280px]'}`}>
+    <div
+      className={`fixed left-0 top-0 h-screen bg-white dark:bg-[#0B1120] border-r border-border transition-all duration-300 ease-in-out z-30 flex flex-col ${isCollapsed ? "w-20" : "w-[280px]"}`}
+    >
       <div className="h-[200px] flex flex-col items-center justify-center border-b border-border dark:border-white/5 py-4">
-        <div className={`transition-all duration-300 ${isCollapsed ? 'w-12 h-12' : 'w-[150px] h-[150px]'} flex items-center justify-center p-1 mb-2`}>
-          <img src="/vizhi.svg" alt="Vizhi" className="w-full h-full object-contain" />
+        <div
+          className={`transition-all duration-300 ${isCollapsed ? "w-12 h-12" : "w-[150px] h-[150px]"} flex items-center justify-center p-1 mb-2`}
+        >
+          <img
+            src="/vizhi.svg"
+            alt="Vizhi"
+            className="w-full h-full object-contain"
+          />
         </div>
         {!isCollapsed && (
-          <span className="font-black text-sm text-slate-900 dark:text-white tracking-tighter">VIZHI</span>
+          <span className="font-black text-sm text-slate-900 dark:text-white tracking-tighter">
+            VIZHI
+          </span>
         )}
       </div>
 
@@ -96,16 +194,24 @@ const Sidebar: React.FC = () => {
                   return (
                     <button
                       key={i}
-                      onClick={() => setTheme(navItem.action as 'light' | 'dark')}
+                      onClick={() =>
+                        setTheme(navItem.action as "light" | "dark")
+                      }
                       className={`
                         w-full flex items-center px-3 py-2.5 rounded-lg transition-all duration-200
-                        ${isActive
-                          ? 'bg-primary text-white shadow-lg'
-                          : 'text-text-secondary hover:bg-primary/10 hover:text-primary'}
+                        ${
+                          isActive
+                            ? "bg-primary text-white shadow-lg"
+                            : "text-text-secondary hover:bg-primary/10 hover:text-primary"
+                        }
                       `}
                     >
-                      <navItem.icon className={`${isCollapsed ? 'mx-auto' : 'mr-3'} w-5 h-5 flex-shrink-0`} />
-                      {!isCollapsed && <span className="font-medium">{navItem.label}</span>}
+                      <navItem.icon
+                        className={`${isCollapsed ? "mx-auto" : "mr-3"} w-5 h-5 flex-shrink-0`}
+                      />
+                      {!isCollapsed && (
+                        <span className="font-medium">{navItem.label}</span>
+                      )}
                     </button>
                   );
                 }
@@ -115,13 +221,19 @@ const Sidebar: React.FC = () => {
                     to={navItem.path!}
                     className={({ isActive }) => `
                       flex items-center px-3 py-2.5 rounded-lg transition-all duration-200
-                      ${isActive
-                        ? 'bg-primary text-white shadow-lg'
-                        : 'text-text-secondary hover:bg-primary/10 hover:text-primary'}
+                      ${
+                        isActive
+                          ? "bg-primary text-white shadow-lg"
+                          : "text-text-secondary hover:bg-primary/10 hover:text-primary"
+                      }
                     `}
                   >
-                    <navItem.icon className={`${isCollapsed ? 'mx-auto' : 'mr-3'} w-5 h-5 flex-shrink-0`} />
-                    {!isCollapsed && <span className="font-medium">{navItem.label}</span>}
+                    <navItem.icon
+                      className={`${isCollapsed ? "mx-auto" : "mr-3"} w-5 h-5 flex-shrink-0`}
+                    />
+                    {!isCollapsed && (
+                      <span className="font-medium">{navItem.label}</span>
+                    )}
                   </NavLink>
                 );
               })}
@@ -131,14 +243,18 @@ const Sidebar: React.FC = () => {
       </div>
 
       {/* Footer */}
-      <div className="p-4 border-t border-border dark:border-white/5 bg-gray-50/50 dark:bg-white/5">
-        <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+      <div className="p-4 border-t border-border dark:border-white/5 bg-gray-50/50 dark:bg-white/5 space-y-4">
+        <div
+          className={`flex items-center ${isCollapsed ? "justify-center" : "justify-between"}`}
+        >
           <div className="flex items-center">
-            <Avatar name={user?.name || ''} url={user?.avatar_url} size="sm" />
+            <Avatar name={user?.name || ""} url={user?.avatar_url} size="sm" />
             {!isCollapsed && (
               <div className="ml-3 overflow-hidden">
-                <p className="text-sm font-bold text-text-primary truncate">{user?.name}</p>
-                <RoleBadge role={user?.role || 'employee'} />
+                <p className="text-sm font-bold text-text-primary truncate">
+                  {user?.name}
+                </p>
+                <RoleBadge role={user?.role || "employee"} />
               </div>
             )}
           </div>
@@ -152,11 +268,23 @@ const Sidebar: React.FC = () => {
           )}
         </div>
 
+        {!isCollapsed && (
+          <div className="text-center pt-2 border-t border-border dark:border-white/10">
+            <p className="text-[10px] font-black text-text-muted uppercase tracking-widest">
+              v{APP_VERSION}
+            </p>
+          </div>
+        )}
+
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="absolute -right-3 top-[74px] w-6 h-6 bg-white dark:bg-primary border border-border dark:border-primary rounded-full flex items-center justify-center shadow-sm hover:bg-gray-50 transition-colors z-40 text-text-primary dark:text-white"
         >
-          {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          {isCollapsed ? (
+            <ChevronRight className="w-4 h-4" />
+          ) : (
+            <ChevronLeft className="w-4 h-4" />
+          )}
         </button>
       </div>
     </div>
