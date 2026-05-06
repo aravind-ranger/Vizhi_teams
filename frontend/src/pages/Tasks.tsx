@@ -100,6 +100,20 @@ const Tasks: React.FC = () => {
     localStorage.setItem('task_form_backup', JSON.stringify(form));
   }, [form]);
 
+  const fetchMetadata = async () => {
+    try {
+      // Fetch Projects
+      const projSnap = await getDocs(collection(db, 'projects'));
+      setProjects(projSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      
+      // Fetch Employees
+      const empSnap = await getDocs(collection(db, 'users'));
+      setEmployees(empSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchMetadata();
     
@@ -181,20 +195,6 @@ const Tasks: React.FC = () => {
       syncBreakWithTasks();
     }
   }, [isPaused, tasks.length, user?.id]);
-
-  const fetchMetadata = async () => {
-    try {
-      // Fetch Projects
-      const projSnap = await getDocs(collection(db, 'projects'));
-      setProjects(projSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      
-      // Fetch Employees
-      const empSnap = await getDocs(collection(db, 'users'));
-      setEmployees(empSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -648,8 +648,8 @@ const Tasks: React.FC = () => {
           ))}
         </div>
       ) : (
-        <div className="glass rounded-[40px] overflow-hidden border-none shadow-sm bg-white/40">
-          <table className="w-full text-left">
+        <div className="glass rounded-[40px] border-none shadow-sm bg-white/40 overflow-x-auto">
+          <table className="w-full text-left min-w-[800px]">
             <thead>
               <tr className="border-b border-white/20 text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
                 <th className="px-8 py-6">Task Identity</th>

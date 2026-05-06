@@ -43,20 +43,18 @@ const ProtectedRoute = ({ children, roles }: { children: React.ReactNode, roles?
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
-      <div className={`flex-1 transition-all duration-250 ${!isFocusMode ? 'lg:pl-0' : ''}`}>
-        <div className={!isFocusMode ? 'lg:pl-60' : ''}>
-          {!isFocusMode && <TopBar onFocusMode={() => setIsFocusMode(true)} onSidebarToggle={() => setIsSidebarOpen(prev => !prev)} />}
-          <main className={!isFocusMode ? 'p-4 sm:p-6 pt-2' : ''}>
-            {isFocusMode && (
-              <React.Suspense fallback={null}>
-                <FocusMode onClose={() => setIsFocusMode(false)} />
-              </React.Suspense>
-            )}
-            <React.Suspense fallback={<div className="skeleton w-full h-96 rounded-card" />}>
-              {children}
+      <div className="flex-1 flex flex-col min-w-0 transition-all duration-250">
+        {!isFocusMode && <TopBar onFocusMode={() => setIsFocusMode(true)} onSidebarToggle={() => setIsSidebarOpen(prev => !prev)} />}
+        <main className={!isFocusMode ? 'p-4 sm:p-6 pt-2 flex-1 overflow-x-hidden' : 'flex-1'}>
+          {isFocusMode && (
+            <React.Suspense fallback={null}>
+              <FocusMode onClose={() => setIsFocusMode(false)} />
             </React.Suspense>
-          </main>
-        </div>
+          )}
+          <React.Suspense fallback={<div className="skeleton w-full h-96 rounded-card" />}>
+            {children}
+          </React.Suspense>
+        </main>
       </div>
     </div>
   );

@@ -118,7 +118,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode, onSidebarToggle }) => {
 
   return (
     <>
-      <header className="sticky top-0 h-[70px] glass z-20 flex flex-wrap items-center justify-between px-4 sm:px-6 mx-4 sm:mx-6 my-2 rounded-2xl transition-all duration-300">
+      <header className="sticky top-0 min-h-[70px] py-2 glass z-20 flex flex-wrap items-center justify-between px-4 sm:px-6 mx-4 sm:mx-6 my-2 rounded-2xl transition-all duration-300">
         <div className="flex items-center min-w-0">
           <button onClick={onSidebarToggle} className="lg:hidden mr-3 p-2 hover:bg-gray-100 rounded-lg transition-colors">
             <Menu className="w-5 h-5 text-text-secondary" />

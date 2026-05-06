@@ -62,7 +62,7 @@ const Projects: React.FC = () => {
   const fetchProjects = async () => {
     setIsLoading(true);
     try {
-      let q = query(collection(db, 'projects'));
+      const q = query(collection(db, 'projects'));
 
       const querySnapshot = await getDocs(q);
       let projectsData = querySnapshot.docs.map(doc => ({
