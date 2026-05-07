@@ -93,14 +93,7 @@ const KanbanTask: React.FC<KanbanTaskProps> = ({ task, isOverlay }) => {
 
       <div className="flex items-center justify-between mt-4">
         <div className="flex items-center space-x-3">
-          <span className="flex items-center text-[10px] font-bold text-text-muted">
-            <MessageSquare className="w-3 h-3 mr-1" />
-            2
-          </span>
-          <span className="flex items-center text-[10px] font-bold text-text-muted">
-            <Paperclip className="w-3 h-3 mr-1" />
-            1
-          </span>
+          {/* Comments and links removed as per request */}
         </div>
         <Avatar name={task.assignee_name || 'Unassigned'} size="xs" />
       </div>

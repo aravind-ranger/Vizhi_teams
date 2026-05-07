@@ -58,7 +58,11 @@
   }
 
   .input {
-    @apply border border-gray-300 dark:border-border rounded-input px-3 py-2 focus:ring-4 focus:ring-primary focus:ring-opacity-20 focus:border-primary outline-none transition w-full bg-white dark:bg-glass text-text-primary;
+    @apply border border-gray-300 dark:border-white/10 rounded-input px-3 py-2 focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all w-full bg-white dark:bg-slate-800/50 text-text-primary placeholder:text-text-muted/50;
+  }
+
+  .input-field {
+    @apply w-full h-12 px-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm text-text-primary placeholder:text-text-muted/40;
   }
 }
 

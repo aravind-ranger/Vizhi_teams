@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, Plus, MoreHorizontal, Calendar, 
-  List, Layout, Settings, Users, X
+  List, Layout, Settings, Users, X, Clock
 } from 'lucide-react';
 import { 
   DndContext, 
@@ -27,6 +27,8 @@ import { doc, getDoc, collection, query, where, getDocs, updateDoc, addDoc, serv
 import KanbanColumn from '../components/KanbanColumn';
 import KanbanTask from '../components/KanbanTask';
 import Avatar from '../components/Avatar';
+import StatusBadge from '../components/StatusBadge';
+import PriorityBadge from '../components/PriorityBadge';
 
 import { useAuthStore } from '../store/useAuthStore';
 import { useAttendanceStore } from '../store/useAttendanceStore';
@@ -65,6 +67,7 @@ const ProjectDetails: React.FC = () => {
   const { user } = useAuthStore();
   const [project, setProject] = useState<any>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [sprints, setSprints] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
@@ -101,7 +104,7 @@ const ProjectDetails: React.FC = () => {
     const tasksRef = collection(db, 'tasks');
     const qTasks = query(tasksRef, where('project_id', '==', id));
 
-    const unsubscribe = onSnapshot(qTasks, (snapshot) => {
+    const unsubscribeTasks = onSnapshot(qTasks, (snapshot) => {
       setTasks(snapshot.docs.map(doc => ({ 
         id: doc.id, 
         ...doc.data(),
@@ -110,7 +113,16 @@ const ProjectDetails: React.FC = () => {
       })) as any);
     });
 
-    return () => unsubscribe();
+    const sprintsRef = collection(db, 'sprints');
+    const qSprints = query(sprintsRef, where('project_id', '==', id));
+    const unsubscribeSprints = onSnapshot(qSprints, (snapshot) => {
+      setSprints(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return () => {
+      unsubscribeTasks();
+      unsubscribeSprints();
+    };
   }, [id, user?.id]);
 
   // Sync tasks with Attendance Breaks
@@ -439,7 +451,7 @@ const ProjectDetails: React.FC = () => {
                       name={emp?.name || '?'} 
                       url={emp?.avatar_url} 
                       size="md" 
-                      className={`ring-2 ${isSelected ? 'ring-primary shadow-xl' : 'ring-white'}`}
+                      className={`ring-2 ${isSelected ? 'ring-primary shadow-xl' : 'ring-white dark:ring-slate-900 shadow-sm'}`}
                     />
                     {isSelected && (
                       <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-primary rounded-full" />
@@ -536,7 +548,7 @@ const ProjectDetails: React.FC = () => {
               {project.members.map((mId: string) => {
                 const emp = employees.find(e => e.id === mId);
                 return (
-                  <div key={mId} className="flex items-center justify-between p-4 bg-white/50 rounded-2xl border border-white/20">
+                  <div key={mId} className="flex items-center justify-between p-4 bg-white/50 dark:bg-white/5 rounded-2xl border border-white/20 dark:border-white/10">
                     <div className="flex items-center space-x-4">
                       <Avatar name={emp?.name || 'User'} size="md" />
                       <div>
@@ -565,6 +577,60 @@ const ProjectDetails: React.FC = () => {
                 );
               })}
             </div>
+          </div>
+        ) : activeTab === 'Task List' ? (
+          <div className="glass rounded-[40px] shadow-sm bg-white/40 dark:bg-white/5 border border-gray-200 dark:border-white/10 overflow-hidden">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-white/20 text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
+                  <th className="px-8 py-6">Task Identity</th>
+                  <th className="px-8 py-6">Status</th>
+                  <th className="px-8 py-6">Priority</th>
+                  <th className="px-8 py-6">Assignee</th>
+                  <th className="px-8 py-6">Due Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.filter(t => !selectedAssigneeId || t.assigned_to === selectedAssigneeId).map((task) => (
+                  <tr
+                    key={task.id}
+                    className="border-b border-white/10 hover:bg-white/60 dark:hover:bg-white/5 transition-all cursor-pointer group"
+                  >
+                    <td className="px-8 py-6">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-black text-text-primary group-hover:text-primary transition-colors">
+                          {task.title}
+                        </span>
+                        <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest mt-1">
+                          {task.task_code}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                       <StatusBadge status={task.status} />
+                    </td>
+                    <td className="px-8 py-6">
+                      <PriorityBadge priority={task.priority} />
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center space-x-3">
+                        <Avatar name={task.assignee_name} size="xs" />
+                        <span className="text-xs font-bold text-text-secondary">{task.assignee_name}</span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="text-xs font-bold text-text-muted">
+                        {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No date'}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : activeTab === 'Sprints' ? (
+          <div className="flex items-center justify-center py-20 text-text-muted italic font-medium">
+            Sprints view coming soon...
           </div>
         ) : (
           <div className="flex items-center justify-center py-20 text-text-muted italic font-medium">

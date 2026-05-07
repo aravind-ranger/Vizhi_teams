@@ -1,7 +1,22 @@
 // Application versioning and release notes
-export const APP_VERSION = "1.0.0";
+export const APP_VERSION = "1.0.1";
 
 export const RELEASE_NOTES = [
+  {
+    version: "1.0.1",
+    date: "May 7, 2026",
+    title: "Projects & UI Refinement",
+    changes: [
+      "Added List View toggle to Projects hub for better management of high-volume projects",
+      "Implemented structured Task List view within Project Details",
+      "Fixed dark mode visibility for project members and advanced filter menus",
+      "Standardized avatar rings (high-contrast) and theme-aware backgrounds across all modules",
+      "Cleaned up Kanban task cards by removing unnecessary placeholders",
+      "Resolved hover state visibility issues in the Tasks advanced filter panel",
+      "Fixed missing Search and Navigation icons in the Projects module",
+      "Professionalized Sidebar UI by removing browser focus rings and standardizing logo contrast",
+    ],
+  },
   {
     version: "1.0.0",
     date: "May 5, 2026",

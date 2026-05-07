@@ -501,7 +501,7 @@ const Dashboard: React.FC = () => {
         <div>
           <h2 className="text-4xl font-black text-text-primary tracking-tight">
             {getGreeting()},{" "}
-            <span className="text-primary">{user?.name.split(" ")[0]}</span> 👋
+            <span className="text-primary">{user?.name.split(" ")[0]}</span> 
           </h2>
           <p className="text-text-muted mt-2 font-medium">
             Ready for another productive day at Vizhi?

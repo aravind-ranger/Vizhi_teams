@@ -542,7 +542,7 @@ const Meets: React.FC = () => {
                     value={chatInput}
                     onChange={(e) => handleChatInputChange(e.target.value)}
                     placeholder="Type a message... (Use @ to mention)"
-                    className="flex-1 h-12 bg-gray-50 dark:bg-white/5 border-none rounded-xl px-4 text-sm font-medium text-text-primary outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="flex-1 h-12 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 text-sm font-medium text-text-primary outline-none focus:ring-4 focus:ring-primary/10 transition-all"
                   />
                   <button
                     type="submit"
@@ -564,8 +564,8 @@ const Meets: React.FC = () => {
           onClick={() => { setShowContentModal(false); setSelectedFile(null); }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div onClick={(e) => e.stopPropagation()} className="bg-white dark:bg-glass rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-scale-up border border-border dark:border-white/10">
-            <div className="px-8 py-6 border-b border-border dark:border-white/10 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white dark:bg-glass rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-scale-up border border-gray-100 dark:border-white/10">
+            <div className="px-8 py-6 border-b border-gray-100 dark:border-white/10 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
               <h3 className="text-xl font-black text-text-primary">Upload File</h3>
               <button onClick={() => { setShowContentModal(false); setSelectedFile(null); }} className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-xl transition-colors">
                 <X className="w-5 h-5 text-text-muted" />
@@ -582,7 +582,7 @@ const Meets: React.FC = () => {
                 <p className="text-[10px] text-text-muted mt-1">Accepts: PDF, JPG, PNG</p>
               </div>
               <div className="flex space-x-3 pt-4">
-                <button onClick={() => { setShowContentModal(false); setSelectedFile(null); }} disabled={isUploading} className="flex-1 h-14 bg-gray-100 dark:bg-white/5 text-text-muted font-black rounded-2xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors disabled:opacity-50">Cancel</button>
+                <button onClick={() => { setShowContentModal(false); setSelectedFile(null); }} disabled={isUploading} className="flex-1 h-14 bg-gray-100 dark:bg-white/5 text-text-muted font-black rounded-2xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors disabled:opacity-50 border border-gray-200 dark:border-white/10">Cancel</button>
                 <button onClick={handleUploadContent} disabled={isUploading || !selectedFile} className="flex-1 h-14 bg-primary text-white font-black rounded-2xl hover:bg-primary-hover shadow-lg shadow-primary/20 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center">
                   {isUploading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Upload'}
                 </button>
@@ -595,12 +595,12 @@ const Meets: React.FC = () => {
       {/* Delete Meeting Confirmation */}
       {showDeleteConfirm && (
         <div onClick={() => setShowDeleteConfirm(null)} className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div onClick={(e) => e.stopPropagation()} className="bg-white dark:bg-glass rounded-[30px] shadow-2xl w-full max-w-sm p-8 border border-border dark:border-white/10 text-center animate-scale-up">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white dark:bg-glass rounded-[30px] shadow-2xl w-full max-w-sm p-8 border border-gray-100 dark:border-white/10 text-center animate-scale-up">
             <Trash2 className="w-12 h-12 text-danger mx-auto mb-4" />
             <h3 className="text-xl font-black text-text-primary mb-2">Delete Meeting?</h3>
             <p className="text-sm text-text-muted mb-8">Are you sure to delete <span className="font-bold text-text-primary">"{selectedMeet?.title}"</span>? This cannot be undone.</p>
             <div className="flex space-x-3">
-              <button onClick={() => setShowDeleteConfirm(null)} className="flex-1 h-12 bg-gray-100 dark:bg-white/5 text-text-muted font-black rounded-2xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">No</button>
+              <button onClick={() => setShowDeleteConfirm(null)} className="flex-1 h-12 bg-gray-100 dark:bg-white/5 text-text-muted font-black rounded-2xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors border border-gray-200 dark:border-white/10">No</button>
               <button onClick={() => handleDeleteMeeting(showDeleteConfirm)} className="flex-1 h-12 bg-danger text-white font-black rounded-2xl hover:bg-danger/80 shadow-lg shadow-danger/20 transition-all active:scale-95">Yes, Delete</button>
             </div>
           </div>
@@ -610,12 +610,12 @@ const Meets: React.FC = () => {
       {/* Delete Material Confirmation */}
       {showMaterialDeleteConfirm && (
         <div onClick={() => setShowMaterialDeleteConfirm(null)} className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div onClick={(e) => e.stopPropagation()} className="bg-white dark:bg-glass rounded-[30px] shadow-2xl w-full max-w-sm p-8 border border-border dark:border-white/10 text-center animate-scale-up">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white dark:bg-glass rounded-[30px] shadow-2xl w-full max-w-sm p-8 border border-gray-100 dark:border-white/10 text-center animate-scale-up">
             <Trash2 className="w-12 h-12 text-danger mx-auto mb-4" />
             <h3 className="text-xl font-black text-text-primary mb-2">Delete Material?</h3>
             <p className="text-sm text-text-muted mb-8">Are you sure you want to delete this material? This action cannot be undone.</p>
             <div className="flex space-x-3">
-              <button onClick={() => setShowMaterialDeleteConfirm(null)} className="flex-1 h-12 bg-gray-100 dark:bg-white/5 text-text-muted font-black rounded-2xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">No</button>
+              <button onClick={() => setShowMaterialDeleteConfirm(null)} className="flex-1 h-12 bg-gray-100 dark:bg-white/5 text-text-muted font-black rounded-2xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors border border-gray-200 dark:border-white/10">No</button>
               <button onClick={handleDeleteMaterial} className="flex-1 h-12 bg-danger text-white font-black rounded-2xl hover:bg-danger/80 shadow-lg shadow-danger/20 transition-all active:scale-95">Yes, Delete</button>
             </div>
           </div>
@@ -626,4 +626,3 @@ const Meets: React.FC = () => {
 };
 
 export default Meets;
-

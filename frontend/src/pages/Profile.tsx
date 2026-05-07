@@ -91,7 +91,7 @@ const Profile: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column: Avatar & Quick Info */}
         <div className="lg:col-span-1 space-y-6">
-          <div className="glass p-8 rounded-[40px] text-center border-none shadow-sm relative overflow-hidden group">
+          <div className="glass p-8 rounded-[40px] text-center border border-gray-100 dark:border-white/10 shadow-sm relative overflow-hidden group">
             <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative mb-6 inline-block">
               <Avatar
@@ -120,13 +120,13 @@ const Profile: React.FC = () => {
             </div>
           </div>
 
-          <div className="glass p-8 rounded-[40px] border-none shadow-sm space-y-4">
+          <div className="glass p-8 rounded-[40px] border border-gray-100 dark:border-white/10 shadow-sm space-y-4">
             <h4 className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] mb-4">
               Security
             </h4>
             <button
               onClick={() => setShowPasswordModal(true)}
-              className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-white/5 rounded-2xl group hover:bg-primary/5 dark:hover:bg-white/10 transition-all"
+              className="w-full flex items-center justify-between p-4 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10 group hover:bg-primary/5 dark:hover:bg-white/10 transition-all"
             >
               <div className="flex items-center space-x-4">
                 <div className="p-2 bg-white dark:bg-white/10 rounded-xl shadow-sm group-hover:text-primary transition-colors">
@@ -143,7 +143,7 @@ const Profile: React.FC = () => {
 
         {/* Right Column: Details */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="glass p-10 rounded-[40px] border-none shadow-sm">
+          <div className="glass p-10 rounded-[40px] border border-gray-100 dark:border-white/10 shadow-sm">
             <h3 className="text-lg font-black text-text-primary mb-8 flex items-center">
               <User className="w-5 h-5 mr-3 text-primary" />
               Personal Details
@@ -154,7 +154,7 @@ const Profile: React.FC = () => {
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
                   Full Name
                 </label>
-                <div className="flex items-center space-x-4 p-5 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10">
+                <div className="flex items-center space-x-4 p-5 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10">
                   <User className="w-4 h-4 text-text-muted" />
                   <span className="text-sm font-bold text-text-primary">
                     {user?.name}
@@ -165,7 +165,7 @@ const Profile: React.FC = () => {
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
                   Email Address
                 </label>
-                <div className="flex items-center space-x-4 p-5 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10">
+                <div className="flex items-center space-x-4 p-5 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10">
                   <Mail className="w-4 h-4 text-text-muted" />
                   <span className="text-sm font-bold text-text-primary">
                     {user?.email}
@@ -176,7 +176,7 @@ const Profile: React.FC = () => {
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
                   Department
                 </label>
-                <div className="flex items-center space-x-4 p-5 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10">
+                <div className="flex items-center space-x-4 p-5 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10">
                   <Building className="w-4 h-4 text-text-muted" />
                   <span className="text-sm font-bold text-text-primary">
                     {user?.department || "Engineering"}
@@ -187,7 +187,7 @@ const Profile: React.FC = () => {
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">
                   Role / Designation
                 </label>
-                <div className="flex items-center space-x-4 p-5 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10">
+                <div className="flex items-center space-x-4 p-5 bg-white dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/10">
                   <Briefcase className="w-4 h-4 text-text-muted" />
                   <span className="text-sm font-bold text-text-primary capitalize">
                     {user?.role}
@@ -197,7 +197,7 @@ const Profile: React.FC = () => {
             </div>
           </div>
 
-          <div className="glass p-10 rounded-[40px] border-none shadow-sm">
+          <div className="glass p-10 rounded-[40px] border border-gray-100 dark:border-white/10 shadow-sm">
             <h3 className="text-lg font-black text-text-primary mb-8 flex items-center">
               <Shield className="w-5 h-5 mr-3 text-success" />
               Account Verification
@@ -251,7 +251,7 @@ const Profile: React.FC = () => {
                   type="password"
                   required
                   placeholder="••••••••"
-                  className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-100 dark:border-white/10 text-text-primary dark:text-white focus:ring-4 focus:ring-primary/5 transition-all"
+                  className="w-full h-14 px-6 bg-white dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-200 dark:border-white/10 text-text-primary dark:text-white focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all"
                   value={passwordForm.oldPassword}
                   onChange={(e) =>
                     setPasswordForm({
@@ -269,7 +269,7 @@ const Profile: React.FC = () => {
                   type="password"
                   required
                   placeholder="••••••••"
-                  className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-100 dark:border-white/10 text-text-primary dark:text-white focus:ring-4 focus:ring-primary/5 transition-all"
+                  className="w-full h-14 px-6 bg-white dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-200 dark:border-white/10 text-text-primary dark:text-white focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all"
                   value={passwordForm.newPassword}
                   onChange={(e) =>
                     setPasswordForm({
@@ -287,7 +287,7 @@ const Profile: React.FC = () => {
                   type="password"
                   required
                   placeholder="••••••••"
-                  className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-100 dark:border-white/10 text-text-primary dark:text-white focus:ring-4 focus:ring-primary/5 transition-all"
+                  className="w-full h-14 px-6 bg-white dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-200 dark:border-white/10 text-text-primary dark:text-white focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all"
                   value={passwordForm.confirmPassword}
                   onChange={(e) =>
                     setPasswordForm({

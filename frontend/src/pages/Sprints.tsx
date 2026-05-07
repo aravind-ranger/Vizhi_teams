@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Plus, Clock, CheckCircle2, FastForward, MoreVertical,
   Users, User as UserIcon, X, Check, Trash2, Edit2, Video
@@ -239,9 +239,11 @@ const Sprints: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {isLoading ? (
-          [1,2,3].map(i => <div key={i} className="skeleton h-80 rounded-[40px]" />)
+          [1, 2, 3].map((i) => (
+            <div key={i} className="skeleton h-80 rounded-[40px]" />
+          ))
         ) : sprints.length === 0 ? (
-          <div className="col-span-full glass p-20 text-center rounded-[40px] border-dashed border-2 border-gray-200">
+          <div className="col-span-full glass p-20 text-center rounded-[40px] border-solid border-2 border-gray-200 dark:border-white/10">
             <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
               <FastForward className="w-10 h-10 text-gray-300" />
             </div>
@@ -253,7 +255,7 @@ const Sprints: React.FC = () => {
             const project = projects.find(p => p.id === sprint.project_id);
             const members = project?.members || [];
             return (
-              <div key={sprint.id} className="group glass p-8 rounded-[40px] border-none shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all cursor-pointer relative overflow-hidden flex flex-col">
+              <div key={sprint.id} className="group glass p-8 rounded-[40px] border border-gray-100 dark:border-white/10 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all cursor-pointer relative overflow-hidden flex flex-col">
                 <div className="flex justify-between items-start mb-8">
                   <div className="flex flex-col space-y-1">
                     <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/5 px-2.5 py-1.5 rounded-xl w-fit">{sprint.project_name}</span>
@@ -278,7 +280,7 @@ const Sprints: React.FC = () => {
                   <div className="pt-2 space-y-3">
                     <p className="text-[9px] font-black text-text-muted uppercase tracking-[0.2em]">Quick Meet</p>
                     <div className="flex gap-2 relative">
-                      <button onClick={(e) => { e.stopPropagation(); setActiveMeetSprint(activeMeetSprint === sprint.id ? null : sprint.id); }} className="flex-1 flex items-center justify-center space-x-2 h-11 bg-white/50 border border-white/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white transition-all shadow-sm">
+                      <button onClick={(e) => { e.stopPropagation(); setActiveMeetSprint(activeMeetSprint === sprint.id ? null : sprint.id); }} className="flex-1 flex items-center justify-center space-x-2 h-11 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white dark:hover:bg-white/10 transition-all shadow-sm">
                         <UserIcon className="w-3 h-3" /><span>With Member</span>
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); startMeet(sprint); }} className="flex-1 flex items-center justify-center space-x-2 h-11 bg-primary text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md shadow-primary/20">
@@ -304,13 +306,13 @@ const Sprints: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-6 border-t border-gray-100 mt-auto">
+                <div className="flex items-center justify-between pt-6 border-t border-gray-100 dark:border-white/5 mt-auto">
                   <div className="flex items-center space-x-6">
                     <div className="text-center">
                       <p className="text-lg font-black text-text-primary">{sprint.task_count}</p>
                       <p className="text-[9px] font-black text-text-muted uppercase tracking-widest">Tasks</p>
                     </div>
-                    <div className="w-px h-8 bg-gray-100" />
+                    <div className="w-px h-8 bg-gray-100 dark:bg-white/5" />
                     <div className="text-center">
                       <p className="text-lg font-black text-success">{sprint.completed_tasks}</p>
                       <p className="text-[9px] font-black text-text-muted uppercase tracking-widest">Done</p>
@@ -343,28 +345,28 @@ const Sprints: React.FC = () => {
       {/* Meet Modal */}
       {showMeetModal && (
         <div onClick={() => setShowMeetModal(false)} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-glass rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden animate-scale-up border border-border dark:border-white/10">
-            <div className="px-8 py-6 border-b border-border dark:border-white/10 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
+          <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-glass rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden animate-scale-up border border-gray-100 dark:border-white/10">
+            <div className="px-8 py-6 border-b border-gray-100 dark:border-white/10 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
               <h3 className="text-xl font-black text-text-primary">Create Sprint Meeting</h3>
               <button onClick={() => setShowMeetModal(false)} className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-xl"><X className="w-5 h-5 text-text-muted" /></button>
             </div>
             <form onSubmit={handleCreateMeet} className="p-8 space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Meeting Title *</label>
-                <input type="text" required value={meetTitle} onChange={e => setMeetTitle(e.target.value)} className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none font-bold text-sm text-text-primary" placeholder="e.g. Daily Standup" />
+                <input type="text" required value={meetTitle} onChange={e => setMeetTitle(e.target.value)} className="input-field" placeholder="e.g. Daily Standup" />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Description</label>
-                <textarea value={meetDesc} onChange={e => setMeetDesc(e.target.value)} className="w-full p-4 bg-gray-50 dark:bg-white/5 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none font-medium text-sm text-text-primary resize-none h-24" placeholder="Meeting agenda..." />
+                <textarea value={meetDesc} onChange={e => setMeetDesc(e.target.value)} className="w-full p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none font-medium text-sm text-text-primary resize-none h-24" placeholder="Meeting agenda..." />
               </div>
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Audience</label>
                 <div className="flex gap-3">
-                  <button type="button" onClick={() => setMeetAudience('all')} className={`flex-1 h-11 rounded-xl text-xs font-black transition-all ${meetAudience === 'all' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-white/5 text-text-muted'}`}><Users className="w-3.5 h-3.5 inline mr-1" />All Members</button>
-                  <button type="button" onClick={() => setMeetAudience('individual')} className={`flex-1 h-11 rounded-xl text-xs font-black transition-all ${meetAudience === 'individual' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-white/5 text-text-muted'}`}><UserIcon className="w-3.5 h-3.5 inline mr-1" />Individual</button>
+                  <button type="button" onClick={() => setMeetAudience('all')} className={`flex-1 h-11 rounded-xl text-xs font-black transition-all border ${meetAudience === 'all' ? 'bg-primary text-white border-primary' : 'bg-white dark:bg-white/5 text-text-muted border-gray-200 dark:border-white/10'}`}><Users className="w-3.5 h-3.5 inline mr-1" />All Members</button>
+                  <button type="button" onClick={() => setMeetAudience('individual')} className={`flex-1 h-11 rounded-xl text-xs font-black transition-all border ${meetAudience === 'individual' ? 'bg-primary text-white border-primary' : 'bg-white dark:bg-white/5 text-text-muted border-gray-200 dark:border-white/10'}`}><UserIcon className="w-3.5 h-3.5 inline mr-1" />Individual</button>
                 </div>
                 {meetAudience === 'individual' && (
-                  <div className="h-40 overflow-y-auto bg-gray-50 dark:bg-white/5 rounded-xl p-2 space-y-1 border border-border dark:border-white/5">
+                  <div className="h-40 overflow-y-auto bg-gray-50 dark:bg-white/5 rounded-xl p-2 space-y-1 border border-gray-200 dark:border-white/10">
                     {users.filter((u: any) => u.id !== user?.id).map((u: any) => {
                       const isSel = meetSelectedUsers.includes(u.id);
                       return (
@@ -378,7 +380,7 @@ const Sprints: React.FC = () => {
                 )}
               </div>
               <div className="flex space-x-3 pt-2">
-                <button type="button" onClick={() => setShowMeetModal(false)} className="flex-1 h-14 bg-gray-100 dark:bg-white/5 text-text-muted font-black rounded-2xl">Cancel</button>
+                <button type="button" onClick={() => setShowMeetModal(false)} className="flex-1 h-14 bg-gray-100 dark:bg-white/5 text-text-muted font-black rounded-2xl border border-gray-200 dark:border-white/10">Cancel</button>
                 <button type="submit" className="flex-1 h-14 bg-primary text-white font-black rounded-2xl hover:bg-primary-hover shadow-lg shadow-primary/20 active:scale-95">Create Meeting</button>
               </div>
             </form>
@@ -389,19 +391,19 @@ const Sprints: React.FC = () => {
       {/* New Sprint Modal */}
       {showNewSprintModal && (
         <div onClick={() => setShowNewSprintModal(false)} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-glass rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden animate-scale-up border border-border dark:border-white/10 max-h-[90vh] overflow-y-auto">
-            <div className="px-8 py-6 border-b border-border dark:border-white/10 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
+          <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-glass rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden animate-scale-up border border-gray-100 dark:border-white/10 max-h-[90vh] overflow-y-auto">
+            <div className="px-8 py-6 border-b border-gray-100 dark:border-white/10 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
               <h3 className="text-xl font-black text-text-primary">Create New Sprint</h3>
               <button onClick={() => setShowNewSprintModal(false)} className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-xl"><X className="w-5 h-5 text-text-muted" /></button>
             </div>
             <form onSubmit={handleCreateSprint} className="p-8 space-y-5">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Sprint Name *</label>
-                <input type="text" required value={newSprintData.name} onChange={e => setNewSprintData({...newSprintData, name: e.target.value})} className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none font-bold text-sm text-text-primary" placeholder="e.g. Sprint 42" />
+                <input type="text" required value={newSprintData.name} onChange={e => setNewSprintData({...newSprintData, name: e.target.value})} className="input-field" placeholder="e.g. Sprint 42" />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Project *</label>
-                <select required value={newSprintData.project_id} onChange={e => setNewSprintData({...newSprintData, project_id: e.target.value})} className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none font-bold text-sm text-text-primary appearance-none dark:text-white">
+                <select required value={newSprintData.project_id} onChange={e => setNewSprintData({...newSprintData, project_id: e.target.value})} className="input-field appearance-none dark:text-white">
                   <option value="" className="dark:bg-slate-800">Select a Project</option>
                   {projects.map(p => <option key={p.id} value={p.id} className="dark:bg-slate-800">{p.name}</option>)}
                 </select>
@@ -411,20 +413,20 @@ const Sprints: React.FC = () => {
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Sprint Goal</label>
                   <button type="button" onClick={() => { const goals = ['Deliver core MVP features.','Fix bugs and optimize performance.','Complete UI redesign.','Implement AI features.']; setNewSprintData({...newSprintData, goal: goals[Math.floor(Math.random()*goals.length)]}); toast.success('Goal generated!'); }} className="text-[10px] font-black text-primary bg-primary/10 px-2 py-1 rounded">✨ Auto-Generate</button>
                 </div>
-                <textarea value={newSprintData.goal} onChange={e => setNewSprintData({...newSprintData, goal: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-white/5 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none font-medium text-sm text-text-primary resize-none h-20" placeholder="Sprint objective..." />
+                <textarea value={newSprintData.goal} onChange={e => setNewSprintData({...newSprintData, goal: e.target.value})} className="w-full p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none font-medium text-sm text-text-primary resize-none h-20" placeholder="Sprint objective..." />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Meeting Time *</label>
-                <input type="time" required value={newSprintData.meeting_time} onChange={e => setNewSprintData({...newSprintData, meeting_time: e.target.value})} className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none font-bold text-sm text-text-primary" />
+                <input type="time" required value={newSprintData.meeting_time} onChange={e => setNewSprintData({...newSprintData, meeting_time: e.target.value})} className="input-field" />
               </div>
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Notify</label>
                 <div className="flex gap-3">
-                  <button type="button" onClick={() => setSprintAudience('all')} className={`flex-1 h-11 rounded-xl text-xs font-black transition-all ${sprintAudience === 'all' ? 'bg-primary text-white shadow-md' : 'bg-gray-100 dark:bg-white/5 text-text-muted'}`}><Users className="w-3.5 h-3.5 inline mr-1" />All Members</button>
-                  <button type="button" onClick={() => setSprintAudience('individual')} className={`flex-1 h-11 rounded-xl text-xs font-black transition-all ${sprintAudience === 'individual' ? 'bg-primary text-white shadow-md' : 'bg-gray-100 dark:bg-white/5 text-text-muted'}`}><UserIcon className="w-3.5 h-3.5 inline mr-1" />Individual</button>
+                  <button type="button" onClick={() => setSprintAudience('all')} className={`flex-1 h-11 rounded-xl text-xs font-black transition-all border ${sprintAudience === 'all' ? 'bg-primary text-white border-primary shadow-md' : 'bg-white dark:bg-white/5 text-text-muted border-gray-200 dark:border-white/10'}`}><Users className="w-3.5 h-3.5 inline mr-1" />All Members</button>
+                  <button type="button" onClick={() => setSprintAudience('individual')} className={`flex-1 h-11 rounded-xl text-xs font-black transition-all border ${sprintAudience === 'individual' ? 'bg-primary text-white border-primary shadow-md' : 'bg-white dark:bg-white/5 text-text-muted border-gray-200 dark:border-white/10'}`}><UserIcon className="w-3.5 h-3.5 inline mr-1" />Individual</button>
                 </div>
                 {sprintAudience === 'individual' && (
-                  <div className="h-40 overflow-y-auto bg-gray-50 dark:bg-white/5 rounded-xl p-2 space-y-1 border border-border dark:border-white/5">
+                  <div className="h-40 overflow-y-auto bg-gray-50 dark:bg-white/5 rounded-xl p-2 space-y-1 border border-gray-200 dark:border-white/10">
                     {users.filter((u: any) => u.id !== user?.id).map((u: any) => {
                       const isSel = sprintSelectedUsers.includes(u.id);
                       return (
@@ -438,7 +440,7 @@ const Sprints: React.FC = () => {
                 )}
               </div>
               <div className="flex space-x-3 pt-2">
-                <button type="button" onClick={() => setShowNewSprintModal(false)} className="flex-1 h-14 bg-gray-100 dark:bg-white/5 text-text-muted font-black rounded-2xl">Cancel</button>
+                <button type="button" onClick={() => setShowNewSprintModal(false)} className="flex-1 h-14 bg-gray-100 dark:bg-white/5 text-text-muted font-black rounded-2xl border border-gray-200 dark:border-white/10">Cancel</button>
                 <button type="submit" className="flex-1 h-14 bg-primary text-white font-black rounded-2xl hover:bg-primary-hover shadow-lg shadow-primary/20 active:scale-95">Create Sprint</button>
               </div>
             </form>
@@ -449,38 +451,38 @@ const Sprints: React.FC = () => {
       {/* Edit Sprint Modal */}
       {showEditSprintModal && editSprintData && (
         <div onClick={() => setShowEditSprintModal(false)} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-glass rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden animate-scale-up border border-border dark:border-white/10 max-h-[90vh] overflow-y-auto">
-            <div className="px-8 py-6 border-b border-border dark:border-white/10 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
+          <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-glass rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden animate-scale-up border border-gray-100 dark:border-white/10 max-h-[90vh] overflow-y-auto">
+            <div className="px-8 py-6 border-b border-gray-100 dark:border-white/10 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
               <h3 className="text-xl font-black text-text-primary">Edit Sprint</h3>
               <button onClick={() => setShowEditSprintModal(false)} className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-xl"><X className="w-5 h-5 text-text-muted" /></button>
             </div>
             <form onSubmit={handleEditSprint} className="p-8 space-y-5">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Sprint Name *</label>
-                <input type="text" required value={editSprintData.name} onChange={e => setEditSprintData({...editSprintData, name: e.target.value})} className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none font-bold text-sm text-text-primary" />
+                <input type="text" required value={editSprintData.name} onChange={e => setEditSprintData({...editSprintData, name: e.target.value})} className="input-field" />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Project *</label>
-                <select required value={editSprintData.project_id} onChange={e => setEditSprintData({...editSprintData, project_id: e.target.value})} className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none font-bold text-sm text-text-primary appearance-none dark:text-white">
+                <select required value={editSprintData.project_id} onChange={e => setEditSprintData({...editSprintData, project_id: e.target.value})} className="input-field appearance-none dark:text-white">
                   {projects.map(p => <option key={p.id} value={p.id} className="dark:bg-slate-800">{p.name}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Sprint Goal</label>
-                <textarea value={editSprintData.goal || ''} onChange={e => setEditSprintData({...editSprintData, goal: e.target.value})} className="w-full p-4 bg-gray-50 dark:bg-white/5 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none font-medium text-sm text-text-primary resize-none h-20" />
+                <textarea value={editSprintData.goal || ''} onChange={e => setEditSprintData({...editSprintData, goal: e.target.value})} className="w-full p-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none font-medium text-sm text-text-primary resize-none h-20" />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Meeting Time *</label>
-                <input type="time" required value={editSprintData.meeting_time || ''} onChange={e => setEditSprintData({...editSprintData, meeting_time: e.target.value})} className="w-full h-12 px-4 bg-gray-50 dark:bg-white/5 border-none rounded-xl focus:ring-2 focus:ring-primary/20 outline-none font-bold text-sm text-text-primary" />
+                <input type="time" required value={editSprintData.meeting_time || ''} onChange={e => setEditSprintData({...editSprintData, meeting_time: e.target.value})} className="input-field" />
               </div>
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">Notify</label>
                 <div className="flex gap-3">
-                  <button type="button" onClick={() => setEditAudience('all')} className={`flex-1 h-11 rounded-xl text-xs font-black transition-all ${editAudience === 'all' ? 'bg-primary text-white shadow-md' : 'bg-gray-100 dark:bg-white/5 text-text-muted'}`}><Users className="w-3.5 h-3.5 inline mr-1" />All Members</button>
-                  <button type="button" onClick={() => setEditAudience('individual')} className={`flex-1 h-11 rounded-xl text-xs font-black transition-all ${editAudience === 'individual' ? 'bg-primary text-white shadow-md' : 'bg-gray-100 dark:bg-white/5 text-text-muted'}`}><UserIcon className="w-3.5 h-3.5 inline mr-1" />Individual</button>
+                  <button type="button" onClick={() => setEditAudience('all')} className={`flex-1 h-11 rounded-xl text-xs font-black transition-all border ${editAudience === 'all' ? 'bg-primary text-white border-primary shadow-md' : 'bg-white dark:bg-white/5 text-text-muted border-gray-200 dark:border-white/10'}`}><Users className="w-3.5 h-3.5 inline mr-1" />All Members</button>
+                  <button type="button" onClick={() => setEditAudience('individual')} className={`flex-1 h-11 rounded-xl text-xs font-black transition-all border ${editAudience === 'individual' ? 'bg-primary text-white border-primary shadow-md' : 'bg-white dark:bg-white/5 text-text-muted border-gray-200 dark:border-white/10'}`}><UserIcon className="w-3.5 h-3.5 inline mr-1" />Individual</button>
                 </div>
                 {editAudience === 'individual' && (
-                  <div className="h-40 overflow-y-auto bg-gray-50 dark:bg-white/5 rounded-xl p-2 space-y-1 border border-border dark:border-white/5">
+                  <div className="h-40 overflow-y-auto bg-gray-50 dark:bg-white/5 rounded-xl p-2 space-y-1 border border-gray-200 dark:border-white/10">
                     {users.filter((u: any) => u.id !== user?.id).map((u: any) => {
                       const isSel = editSelectedUsers.includes(u.id);
                       return (
@@ -494,7 +496,7 @@ const Sprints: React.FC = () => {
                 )}
               </div>
               <div className="flex space-x-3 pt-2">
-                <button type="button" onClick={() => setShowEditSprintModal(false)} className="flex-1 h-14 bg-gray-100 dark:bg-white/5 text-text-muted font-black rounded-2xl">Cancel</button>
+                <button type="button" onClick={() => setShowEditSprintModal(false)} className="flex-1 h-14 bg-gray-100 dark:bg-white/5 text-text-muted font-black rounded-2xl border border-gray-200 dark:border-white/10">Cancel</button>
                 <button type="submit" className="flex-1 h-14 bg-primary text-white font-black rounded-2xl hover:bg-primary-hover shadow-lg shadow-primary/20 active:scale-95">Save Changes</button>
               </div>
             </form>
@@ -505,12 +507,12 @@ const Sprints: React.FC = () => {
       {/* Delete Sprint Confirm */}
       {deleteSprintId && (
         <div onClick={() => setDeleteSprintId(null)} className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-glass rounded-[30px] shadow-2xl w-full max-w-sm p-8 border border-border dark:border-white/10 text-center animate-scale-up">
+          <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-glass rounded-[30px] shadow-2xl w-full max-w-sm p-8 border border-gray-100 dark:border-white/10 text-center animate-scale-up">
             <Trash2 className="w-12 h-12 text-danger mx-auto mb-4" />
             <h3 className="text-xl font-black text-text-primary mb-2">Delete Sprint?</h3>
             <p className="text-sm text-text-muted mb-8">This sprint will be permanently removed.</p>
             <div className="flex space-x-3">
-              <button onClick={() => setDeleteSprintId(null)} className="flex-1 h-12 bg-gray-100 dark:bg-white/5 text-text-muted font-black rounded-2xl">No</button>
+              <button onClick={() => setDeleteSprintId(null)} className="flex-1 h-12 bg-gray-100 dark:bg-white/5 text-text-muted font-black rounded-2xl border border-gray-200 dark:border-white/10">No</button>
               <button onClick={() => handleDeleteSprint(deleteSprintId)} className="flex-1 h-12 bg-danger text-white font-black rounded-2xl hover:bg-danger/80 shadow-lg shadow-danger/20 active:scale-95">Yes, Delete</button>
             </div>
           </div>

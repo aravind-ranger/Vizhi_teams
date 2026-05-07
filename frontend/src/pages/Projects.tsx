@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Filter, MoreVertical,
-  Calendar, Users, CheckCircle2, Clock, Briefcase, Lock, Check
+  Calendar, Users, CheckCircle2, Clock, Briefcase, Lock, Check, List, Layout
 } from 'lucide-react';
 import { db } from '../firebase.ts';
 import { collection, query, getDocs, orderBy, where, addDoc, serverTimestamp, updateDoc, deleteDoc, doc } from 'firebase/firestore';
@@ -29,6 +29,7 @@ interface Project {
 const Projects: React.FC = () => {
   const { user } = useAuthStore();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [view, setView] = useState<'grid' | 'list'>('grid');
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState('All');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -201,13 +202,29 @@ const Projects: React.FC = () => {
             </button>
           ))}
         </div>
-        <div className="relative max-w-xs w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search projects..."
-            className="input pl-10 border-none shadow-sm focus:bg-white dark:focus:bg-glass"
-          />
+        <div className="flex items-center space-x-3 w-full md:w-auto">
+          <div className="bg-gray-100 dark:bg-white/5 p-1 rounded-2xl flex items-center shadow-inner flex-1 md:flex-none">
+            <button
+              onClick={() => setView('grid')}
+              className={`flex-1 md:flex-none p-2.5 rounded-xl transition-all ${view === 'grid' ? 'bg-white dark:bg-primary shadow-md text-primary dark:text-white scale-105' : 'text-text-muted hover:text-text-secondary'}`}
+            >
+              <Layout className="w-4 h-4 mx-auto" />
+            </button>
+            <button
+              onClick={() => setView('list')}
+              className={`flex-1 md:flex-none p-2.5 rounded-xl transition-all ${view === 'list' ? 'bg-white dark:bg-primary shadow-md text-primary dark:text-white scale-105' : 'text-text-muted hover:text-text-secondary'}`}
+            >
+              <List className="w-4 h-4 mx-auto" />
+            </button>
+          </div>
+          <div className="relative max-w-xs w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search projects..."
+              className="input pl-10 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-primary shadow-sm focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+            />
+          </div>
         </div>
       </div>
 
@@ -248,7 +265,7 @@ const Projects: React.FC = () => {
                           e.stopPropagation(); 
                           setOpenMenuId(openMenuId === project.id ? null : project.id);
                         }}
-                        className={`p-2 rounded-full transition-colors ${openMenuId === project.id ? 'bg-white/50 text-primary' : 'text-text-muted hover:bg-white/50'}`}
+                        className={`p-2 rounded-full transition-colors ${openMenuId === project.id ? 'bg-white/50 dark:bg-white/10 text-primary' : 'text-text-muted hover:bg-white/50 dark:hover:bg-white/10'}`}
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
@@ -312,7 +329,7 @@ const Projects: React.FC = () => {
                         const emp = employees.find(e => e.id === mId);
                         return (
                           <div key={i} className="relative group/avatar">
-                            <Avatar name={emp?.name || 'User'} size="xs" className="ring-4 ring-white/50" />
+                            <Avatar name={emp?.name || 'User'} size="xs" className="ring-2 ring-white dark:ring-slate-900 shadow-sm" />
                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-[8px] font-black rounded opacity-0 group-hover/avatar:opacity-100 transition-opacity whitespace-nowrap z-30">
                               {emp?.name || 'Loading...'}
                             </div>
@@ -320,7 +337,7 @@ const Projects: React.FC = () => {
                         );
                       })}
                       {project.members?.length > 3 && (
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary ring-4 ring-white/50">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary ring-2 ring-white dark:ring-slate-900">
                           +{project.members.length - 3}
                         </div>
                       )}
@@ -346,7 +363,7 @@ const Projects: React.FC = () => {
                   <input
                     type="text"
                     placeholder="e.g., Q2 Marketing Campaign"
-                    className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all text-text-primary"
+                    className="w-full h-14 px-6 bg-white dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-200 dark:border-white/10 focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-text-primary"
                     value={newProject.name}
                     onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
                   />
@@ -356,7 +373,7 @@ const Projects: React.FC = () => {
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Description</label>
                 <textarea
                   placeholder="What is this project about?"
-                  className="w-full h-32 p-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all resize-none text-text-primary"
+                  className="w-full h-32 p-6 bg-white dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-200 dark:border-white/10 focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all resize-none text-text-primary"
                   value={newProject.description}
                   onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
                 />
@@ -367,7 +384,7 @@ const Projects: React.FC = () => {
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Deadline</label>
                   <input
                     type="date"
-                    className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all text-text-primary"
+                    className="w-full h-14 px-6 bg-white dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-200 dark:border-white/10 focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-text-primary"
                     value={newProject.deadline}
                     onChange={(e) => setNewProject({ ...newProject, deadline: e.target.value })}
                   />
@@ -375,7 +392,7 @@ const Projects: React.FC = () => {
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Initial Status</label>
                   <select
-                    className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all text-text-primary appearance-none"
+                    className="w-full h-14 px-6 bg-white dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-200 dark:border-white/10 focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-text-primary appearance-none"
                     value={newProject.status}
                     onChange={(e) => setNewProject({ ...newProject, status: e.target.value as any })}
                   >
@@ -443,7 +460,7 @@ const Projects: React.FC = () => {
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Project Name</label>
                 <input
                   type="text"
-                  className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all text-text-primary"
+                  className="w-full h-14 px-6 bg-white dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-200 dark:border-white/10 focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-text-primary"
                   value={selectedProject.name}
                   onChange={(e) => setSelectedProject({ ...selectedProject, name: e.target.value })}
                 />
@@ -453,7 +470,7 @@ const Projects: React.FC = () => {
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Deadline</label>
                   <input
                     type="date"
-                    className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all text-text-primary"
+                    className="w-full h-14 px-6 bg-white dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-200 dark:border-white/10 focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-text-primary"
                     value={selectedProject.end_date}
                     onChange={(e) => setSelectedProject({ ...selectedProject, end_date: e.target.value })}
                   />
@@ -461,7 +478,7 @@ const Projects: React.FC = () => {
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Status</label>
                   <select
-                    className="w-full h-14 px-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all text-text-primary appearance-none"
+                    className="w-full h-14 px-6 bg-white dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-200 dark:border-white/10 focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-text-primary appearance-none"
                     value={selectedProject.status}
                     onChange={(e) => setSelectedProject({ ...selectedProject, status: e.target.value as any })}
                   >
@@ -477,7 +494,7 @@ const Projects: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-text-muted uppercase tracking-widest ml-1">Description</label>
                 <textarea
-                  className="w-full h-32 p-6 bg-gray-50 dark:bg-white/5 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all resize-none text-text-primary"
+                  className="w-full h-32 p-6 bg-white dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-200 dark:border-white/10 focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all resize-none text-text-primary"
                   value={selectedProject.description}
                   onChange={(e) => setSelectedProject({ ...selectedProject, description: e.target.value })}
                 />

@@ -755,12 +755,12 @@ const Tasks: React.FC = () => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="input h-14 pl-12 border-none shadow-sm focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+              className="input h-14 pl-12 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-primary shadow-sm focus:ring-4 focus:ring-primary/10 transition-all font-medium"
             />
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`h-14 px-6 rounded-2xl glass flex items-center text-sm font-bold border-none transition-all shadow-sm ${showFilters ? "bg-primary text-white shadow-primary/20" : "text-text-secondary hover:bg-white/80"}`}
+            className={`h-14 px-6 rounded-2xl glass flex items-center text-sm font-bold transition-all border border-gray-200 dark:border-white/10 ${showFilters ? "bg-primary text-white shadow-primary/20" : "text-text-secondary hover:bg-gray-50 dark:hover:bg-white/10"}`}
           >
             <Filter className="w-4 h-4 mr-3" />
             Advanced Filters
@@ -779,7 +779,7 @@ const Tasks: React.FC = () => {
                   setStatusFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full h-12 px-4 bg-gray-50 dark:bg-slate-900 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/20 appearance-none text-text-primary dark:text-white dark:[color-scheme:dark]"
+                className="w-full h-12 px-4 bg-gray-50 dark:bg-slate-900 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/20 appearance-none text-text-primary dark:text-white dark:[color-scheme:dark] hover:bg-gray-100 dark:hover:bg-white/10 transition-all"
               >
                 <option value="all" className="bg-white dark:bg-slate-900">
                   All Statuses
@@ -811,7 +811,7 @@ const Tasks: React.FC = () => {
                   setPriorityFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full h-12 px-4 bg-gray-50 dark:bg-slate-900 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/20 appearance-none text-text-primary dark:text-white dark:[color-scheme:dark]"
+                className="w-full h-12 px-4 bg-gray-50 dark:bg-slate-900 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/20 appearance-none text-text-primary dark:text-white dark:[color-scheme:dark] hover:bg-gray-100 dark:hover:bg-white/10 transition-all"
               >
                 <option value="all" className="bg-white dark:bg-slate-900">
                   All Priorities
@@ -837,7 +837,7 @@ const Tasks: React.FC = () => {
                   setProjectFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full h-12 px-4 bg-gray-50 dark:bg-slate-900 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/20 appearance-none text-text-primary dark:text-white dark:[color-scheme:dark]"
+                className="w-full h-12 px-4 bg-gray-50 dark:bg-slate-900 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/20 appearance-none text-text-primary dark:text-white dark:[color-scheme:dark] hover:bg-gray-100 dark:hover:bg-white/10 transition-all"
               >
                 <option value="all" className="bg-white dark:bg-slate-900">
                   All Projects
@@ -863,7 +863,7 @@ const Tasks: React.FC = () => {
                   setAssigneeFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full h-12 px-4 bg-gray-50 dark:bg-slate-900 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/20 appearance-none text-text-primary dark:text-white dark:[color-scheme:dark]"
+                className="w-full h-12 px-4 bg-gray-50 dark:bg-slate-900 rounded-xl text-xs font-bold border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/20 appearance-none text-text-primary dark:text-white dark:[color-scheme:dark] hover:bg-gray-100 dark:hover:bg-white/10 transition-all"
               >
                 <option value="all" className="bg-white dark:bg-slate-900">
                   All Members
@@ -924,7 +924,7 @@ const Tasks: React.FC = () => {
                           <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/5 px-2.5 py-1.5 rounded-xl w-fit">
                             {task.project_name}
                           </span>
-                          <div className="flex items-center space-x-1.5 text-[10px] font-black text-text-muted bg-gray-50 dark:bg-white/5 px-2 py-1 rounded-lg border border-gray-100 dark:border-white/5 group-hover:border-primary/20 transition-colors">
+                          <div className="flex items-center space-x-1.5 text-[10px] font-black text-text-muted  px-2 py-1 rounded-lg border border-gray-100 dark:border-white/5 group-hover:border-primary/20 transition-colors">
                             <Link className="w-2.5 h-2.5 text-primary/60" />
                             <span className="tracking-tighter">
                               {task.task_code}
@@ -1079,7 +1079,7 @@ const Tasks: React.FC = () => {
         </div>
       ) : (
         <>
-          <div className="glass rounded-[40px] border-none shadow-sm bg-white/40 dark:bg-white/5">
+          <div className="glass rounded-[40px] shadow-sm bg-white/40 dark:bg-white/5 border border-gray-200 dark:border-white/10">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-white/20 text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
@@ -1096,7 +1096,7 @@ const Tasks: React.FC = () => {
                   <tr
                     key={task.id}
                     onClick={() => setSelectedTask(task)}
-                    className={`border-b border-white/10 hover:bg-white/60 transition-all cursor-pointer group ${task.active_session_id ? "bg-primary/5" : ""}`}
+                    className={`border-b border-white/10 hover:bg-white/60 dark:hover:bg-white/5 transition-all cursor-pointer group ${task.active_session_id ? "bg-primary/5" : ""}`}
                   >
                     <td className="px-8 py-6">
                       <div className="flex flex-col">
@@ -1184,12 +1184,12 @@ const Tasks: React.FC = () => {
                               openMenuId === task.id ? null : task.id,
                             );
                           }}
-                          className={`p-2 rounded-lg text-text-muted transition-all ${openMenuId === task.id ? "bg-gray-100 text-primary" : "hover:bg-gray-100"}`}
+                          className={`p-2 rounded-lg text-text-muted transition-all ${openMenuId === task.id ? "bg-gray-100 dark:bg-white/10 text-primary" : "hover:bg-gray-100 dark:hover:bg-white/5"}`}
                         >
                           <MoreVertical className="w-5 h-5" />
                         </button>
                         {openMenuId === task.id && (
-                          <div className="absolute right-full mr-2 top-0 w-48 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-gray-100 py-2 z-[100] animate-in slide-in-from-right-2 fade-in duration-200">
+                          <div className="absolute right-full mr-2 top-0 w-48 bg-white dark:bg-glass rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-gray-100 dark:border-white/10 py-2 z-[100] animate-in slide-in-from-right-2 fade-in duration-200">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1242,7 +1242,7 @@ const Tasks: React.FC = () => {
                     setCurrentPage((prev) => Math.max(prev - 1, 1))
                   }
                   disabled={currentPage === 1}
-                  className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/5 text-text-muted hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  className="p-2.5 rounded-xl  text-text-muted hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 >
                   <ChevronRight className="w-5 h-5 rotate-180" />
                 </button>
@@ -1251,7 +1251,7 @@ const Tasks: React.FC = () => {
                     <button
                       key={i}
                       onClick={() => setCurrentPage(i + 1)}
-                      className={`w-10 h-10 rounded-xl text-xs font-black transition-all ${currentPage === i + 1 ? "bg-primary text-white shadow-lg shadow-primary/20" : "bg-gray-50 dark:bg-white/5 text-text-muted hover:bg-gray-100"}`}
+                      className={`w-10 h-10 rounded-xl text-xs font-black transition-all ${currentPage === i + 1 ? "bg-primary text-white shadow-lg shadow-primary/20" : " text-text-muted hover:bg-gray-100"}`}
                     >
                       {i + 1}
                     </button>
@@ -1262,7 +1262,7 @@ const Tasks: React.FC = () => {
                     setCurrentPage((prev) => Math.min(prev + 1, totalPages))
                   }
                   disabled={currentPage === totalPages}
-                  className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/5 text-text-muted hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  className="p-2.5 rounded-xl  text-text-muted hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>
@@ -1289,7 +1289,7 @@ const Tasks: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center space-x-3">
-                <button className="btn-secondary h-11 px-5 border-none bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 font-bold text-xs">
+                <button className="btn-secondary h-11 px-5   hover:bg-gray-100 dark:hover:bg-white/10 font-bold text-xs">
                   <Save className="w-4 h-4 mr-2" />
                   Save Changes
                 </button>
@@ -1321,7 +1321,7 @@ const Tasks: React.FC = () => {
                     onChange={(e) =>
                       updateStatus(selectedTask.id, e.target.value)
                     }
-                    className="w-full h-14 px-5 bg-gray-50 dark:bg-white/5 rounded-2xl font-black text-xs uppercase tracking-widest outline-none ring-primary/10 focus:ring-4 transition-all appearance-none cursor-pointer border-none text-text-primary dark:text-white"
+                    className="w-full h-14 px-5  rounded-2xl font-black text-xs uppercase tracking-widest outline-none ring-primary/10 focus:ring-4 transition-all appearance-none cursor-pointer  text-text-primary dark:text-white"
                   >
                     <option value="todo" className="dark:bg-slate-900">
                       To Do
@@ -1341,7 +1341,7 @@ const Tasks: React.FC = () => {
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest">
                     Assigned To
                   </label>
-                  <div className="flex items-center space-x-4 h-14 px-5 bg-gray-50 dark:bg-white/5 rounded-2xl">
+                  <div className="flex items-center space-x-4 h-14 px-5  rounded-2xl">
                     <Avatar name={selectedTask.assignee_name} size="xs" />
                     <span className="text-sm font-bold text-text-primary">
                       {selectedTask.assignee_name}
@@ -1354,7 +1354,7 @@ const Tasks: React.FC = () => {
                 <h3 className="text-xs font-black text-text-muted uppercase tracking-widest">
                   Mission Description
                 </h3>
-                <div className="bg-gray-50 dark:bg-white/5 p-8 rounded-[32px] text-text-secondary dark:text-white/60 leading-relaxed font-medium whitespace-pre-wrap">
+                <div className=" p-8 rounded-[32px] text-text-secondary dark:text-white/60 leading-relaxed font-medium whitespace-pre-wrap">
                   {selectedTask.description ||
                     "No description provided for this mission."}
                 </div>
@@ -1444,7 +1444,7 @@ const Tasks: React.FC = () => {
               </div>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="w-10 h-10 flex items-center justify-center bg-white dark:bg-white/10 rounded-xl shadow-sm hover:text-danger transition-colors text-text-primary"
+                className="w-10 h-10 flex items-center justify-center bg-white dark:bg-white/10 rounded-xl shadow-sm hover:text-danger transition-colors text-text-primary border border-gray-100 dark:border-white/10"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1459,7 +1459,7 @@ const Tasks: React.FC = () => {
                   <input
                     type="text"
                     required
-                    className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold"
+                    className="input h-12 px-5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-primary shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold"
                     placeholder="e.g. Design System Implementation"
                     value={form.title}
                     onChange={(e) =>
@@ -1475,7 +1475,7 @@ const Tasks: React.FC = () => {
                     </label>
                     <select
                       required
-                      className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
+                      className="input h-12 px-5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-primary shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
                       value={form.project_id}
                       onChange={(e) =>
                         setForm({ ...form, project_id: e.target.value })
@@ -1504,7 +1504,7 @@ const Tasks: React.FC = () => {
                       step="0.5"
                       min="0"
                       required
-                      className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold dark:text-white"
+                      className="input h-12 px-5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-primary shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold dark:text-white"
                       placeholder="e.g. 4.5"
                       value={form.estimated_hours}
                       onChange={(e) => {
@@ -1525,7 +1525,7 @@ const Tasks: React.FC = () => {
                     </label>
                     <select
                       required
-                      className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
+                      className="input h-12 px-5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-primary shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
                       value={form.assigned_to}
                       onChange={(e) =>
                         setForm({ ...form, assigned_to: e.target.value })
@@ -1550,7 +1550,7 @@ const Tasks: React.FC = () => {
                       Priority
                     </label>
                     <select
-                      className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
+                      className="input h-12 px-5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-primary shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold appearance-none cursor-pointer dark:bg-slate-800 dark:text-white"
                       value={form.priority}
                       onChange={(e) =>
                         setForm({ ...form, priority: e.target.value })
@@ -1577,7 +1577,7 @@ const Tasks: React.FC = () => {
                     <input
                       type="date"
                       required
-                      className="input h-12 px-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold"
+                      className="input h-12 px-5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-primary shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-bold"
                       value={form.due_date}
                       onChange={(e) =>
                         setForm({ ...form, due_date: e.target.value })
@@ -1597,7 +1597,7 @@ const Tasks: React.FC = () => {
                     Mission Briefing
                   </label>
                   <textarea
-                    className="input min-h-[100px] p-5 border-none shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-medium leading-relaxed"
+                    className="input min-h-[100px] p-5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-primary shadow-sm focus:bg-white dark:focus:bg-white/10 transition-all text-sm font-medium leading-relaxed"
                     placeholder="Define the objectives and requirements..."
                     value={form.description}
                     onChange={(e) =>
@@ -1634,7 +1634,7 @@ const Tasks: React.FC = () => {
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setShowEditModal(false)}
           />
-          <div className="relative bg-white w-full max-w-xl rounded-[40px] p-10 shadow-2xl animate-scale-up">
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-xl rounded-[40px] p-10 shadow-2xl animate-scale-up">
             <h2 className="text-3xl font-black text-text-primary mb-8">
               Edit Task
             </h2>
@@ -1646,7 +1646,7 @@ const Tasks: React.FC = () => {
                 <input
                   type="text"
                   required
-                  className="w-full h-14 px-6 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all"
+                  className="w-full h-14 px-6 rounded-2xl font-bold text-sm bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all dark:text-white"
                   value={selectedTask.title}
                   onChange={(e) =>
                     setSelectedTask({ ...selectedTask, title: e.target.value })
@@ -1658,7 +1658,7 @@ const Tasks: React.FC = () => {
                   Description
                 </label>
                 <textarea
-                  className="w-full h-32 px-6 py-4 bg-gray-50 rounded-2xl font-bold text-sm border-none focus:ring-4 focus:ring-primary/5 transition-all resize-none"
+                  className="w-full h-32 px-6 py-4 rounded-2xl font-bold text-sm bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all resize-none dark:text-white"
                   value={selectedTask.description}
                   onChange={(e) =>
                     setSelectedTask({
@@ -1672,7 +1672,7 @@ const Tasks: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="flex-1 h-14 rounded-2xl font-bold text-text-secondary hover:bg-gray-100 transition-all"
+                  className="flex-1 h-14 rounded-2xl font-bold text-text-secondary hover:bg-gray-100 dark:hover:bg-white/5 transition-all"
                 >
                   Cancel
                 </button>
@@ -1695,7 +1695,7 @@ const Tasks: React.FC = () => {
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setShowDeleteModal(false)}
           />
-          <div className="relative bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl animate-scale-up text-center">
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-sm rounded-[40px] p-10 shadow-2xl animate-scale-up text-center">
             <div className="w-20 h-20 bg-danger/10 rounded-full flex items-center justify-center mx-auto mb-6">
               <Trash2 className="w-10 h-10 text-danger" />
             </div>
@@ -1715,7 +1715,7 @@ const Tasks: React.FC = () => {
               </button>
               <button
                 onClick={() => setShowDeleteModal(false)}
-                className="h-14 rounded-2xl font-bold text-text-secondary hover:bg-gray-100 transition-all"
+                className="h-14 rounded-2xl font-bold text-text-secondary hover:bg-gray-100 dark:hover:bg-white/5 transition-all"
               >
                 No, Keep it
               </button>

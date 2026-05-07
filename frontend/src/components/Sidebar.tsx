@@ -1,5 +1,5 @@
 import React from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import {
   Users,
   Calendar,
@@ -16,6 +16,7 @@ import {
   Sun,
   Moon,
   Video,
+  Settings,
 } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useThemeStore } from "../store/useThemeStore";
@@ -29,6 +30,7 @@ const Sidebar: React.FC = () => {
   const { user, logout } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => {
     logout();
@@ -37,7 +39,7 @@ const Sidebar: React.FC = () => {
 
   const navSections = [
     {
-      title: "OVERVIEW",
+      title: "Main Menu",
       items: [
         {
           label: "Dashboard",
@@ -48,7 +50,7 @@ const Sidebar: React.FC = () => {
       ],
     },
     {
-      title: "HR & PEOPLE",
+      title: "People & HR",
       items: [
         {
           label: "Team Directory",
@@ -77,7 +79,7 @@ const Sidebar: React.FC = () => {
       ],
     },
     {
-      title: "PROJECTS",
+      title: "Execution",
       items: [
         {
           label: "Projects",
@@ -112,24 +114,7 @@ const Sidebar: React.FC = () => {
       ],
     },
     {
-      title: "THEMES",
-      items: [
-        {
-          label: "Light Mode",
-          icon: Sun,
-          action: "light",
-          roles: ["admin", "manager", "employee"],
-        },
-        {
-          label: "Dark Mode",
-          icon: Moon,
-          action: "dark",
-          roles: ["admin", "manager", "employee"],
-        },
-      ],
-    },
-    {
-      title: "TOOLS",
+      title: "Analytics",
       items: [
         {
           label: "Reports",
@@ -158,81 +143,69 @@ const Sidebar: React.FC = () => {
 
   return (
     <div
-      className={`fixed left-0 top-0 h-screen bg-white dark:bg-[#0B1120] border-r border-border transition-all duration-300 ease-in-out z-30 flex flex-col ${isCollapsed ? "w-20" : "w-[280px]"}`}
+      className={`fixed left-0 top-0 h-screen bg-white/80 dark:bg-slate-900/90 backdrop-blur-xl border-r border-gray-200 dark:border-white/5 transition-all duration-500 ease-in-out z-30 flex flex-col shadow-2xl ${isCollapsed ? "w-20" : "w-[280px]"}`}
     >
-      <div className="h-[200px] flex flex-col items-center justify-center border-b border-border dark:border-white/5 py-4">
-        <div
-          className={`transition-all duration-300 ${isCollapsed ? "w-12 h-12" : "w-[150px] h-[150px]"} flex items-center justify-center p-1 mb-2`}
-        >
-          <img
-            src="/vizhi.svg"
-            alt="Vizhi"
-            className="w-full h-full object-contain"
-          />
+      {/* Brand Header */}
+      <div className="h-24 flex items-center px-6 border-b border-gray-100 dark:border-white/5 relative">
+        <div className={`flex items-center space-x-3 ${isCollapsed ? "justify-center w-full" : ""}`}>
+          {/* Logo container: Always black in light mode, primary/10 in dark mode */}
+          <div className="w-10 h-10 bg-black dark:bg-primary/20 rounded-xl flex items-center justify-center p-2 shadow-lg transition-colors overflow-hidden">
+            <img src="/Vizhi_Logo.png" alt="Vizhi" className="w-full h-full object-contain brightness-0 invert" />
+          </div>
+          {!isCollapsed && (
+            <div className="flex flex-col">
+              <span className="font-black text-lg text-slate-900 dark:text-white leading-none tracking-tight">
+                VIZHI
+              </span>
+              <span className="text-[10px] font-bold text-primary tracking-[0.2em] uppercase mt-0.5">
+                Teams
+              </span>
+            </div>
+          )}
         </div>
-        {!isCollapsed && (
-          <span className="font-black text-sm text-slate-900 dark:text-white tracking-tighter">
-            VIZHI
-          </span>
-        )}
       </div>
 
-      {/* Nav Items */}
-      <div className="flex-1 overflow-y-auto py-6 px-3 space-y-8 scrollbar-hide">
+      {/* Navigation Scroll Area */}
+      <div className="flex-1 overflow-y-auto py-8 px-4 space-y-10 scrollbar-hide">
         {filteredSections.map((section, idx) => (
-          <div key={idx} className="space-y-2">
+          <div key={idx} className="space-y-3">
             {!isCollapsed && (
-              <h3 className="px-3 text-[11px] font-bold text-text-muted uppercase tracking-wider">
+              <h3 className="px-4 text-[10px] font-black text-text-muted uppercase tracking-[0.2em] opacity-60">
                 {section.title}
               </h3>
             )}
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {section.items.map((item, i) => {
-                const navItem = item as any;
-                if (navItem.action) {
-                  const isActive = theme === navItem.action;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() =>
-                        setTheme(navItem.action as "light" | "dark")
-                      }
-                      className={`
-                        w-full flex items-center px-3 py-2.5 rounded-lg transition-all duration-200
-                        ${
-                          isActive
-                            ? "bg-primary text-white shadow-lg"
-                            : "text-text-secondary hover:bg-primary/10 hover:text-primary"
-                        }
-                      `}
-                    >
-                      <navItem.icon
-                        className={`${isCollapsed ? "mx-auto" : "mr-3"} w-5 h-5 flex-shrink-0`}
-                      />
-                      {!isCollapsed && (
-                        <span className="font-medium">{navItem.label}</span>
-                      )}
-                    </button>
-                  );
-                }
+                const isActive = location.pathname === item.path;
                 return (
                   <NavLink
                     key={i}
-                    to={navItem.path!}
-                    className={({ isActive }) => `
-                      flex items-center px-3 py-2.5 rounded-lg transition-all duration-200
+                    to={item.path!}
+                    className={`
+                      group relative flex items-center px-4 py-3 rounded-2xl transition-all duration-300 outline-none focus:outline-none
                       ${
                         isActive
-                          ? "bg-primary text-white shadow-lg"
-                          : "text-text-secondary hover:bg-primary/10 hover:text-primary"
+                          ? "bg-primary text-white shadow-lg shadow-primary/25 scale-[1.02]"
+                          : "text-text-secondary hover:bg-primary/5 hover:text-primary"
                       }
                     `}
                   >
-                    <navItem.icon
-                      className={`${isCollapsed ? "mx-auto" : "mr-3"} w-5 h-5 flex-shrink-0`}
+                    <item.icon
+                      className={`
+                        ${isCollapsed ? "mx-auto" : "mr-3.5"} 
+                        w-5 h-5 flex-shrink-0 transition-transform duration-300
+                        ${!isActive && "group-hover:scale-110 group-hover:rotate-3"}
+                      `}
                     />
                     {!isCollapsed && (
-                      <span className="font-medium">{navItem.label}</span>
+                      <span className="font-bold text-sm tracking-tight">{item.label}</span>
+                    )}
+                    
+                    {/* Tooltip for collapsed mode */}
+                    {isCollapsed && (
+                      <div className="absolute left-20 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap shadow-xl z-50">
+                        {item.label}
+                      </div>
                     )}
                   </NavLink>
                 );
@@ -242,51 +215,81 @@ const Sidebar: React.FC = () => {
         ))}
       </div>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-border dark:border-white/5 bg-gray-50/50 dark:bg-white/5 space-y-4">
-        <div
-          className={`flex items-center ${isCollapsed ? "justify-center" : "justify-between"}`}
-        >
-          <div className="flex items-center">
-            <Avatar name={user?.name || ""} url={user?.avatar_url} size="sm" />
+      {/* Professional Footer */}
+      <div className="p-4 bg-gray-50/50 dark:bg-white/5 border-t border-gray-100 dark:border-white/5">
+        {/* Theme Switcher Toggle */}
+        <div className={`mb-4 flex items-center bg-white dark:bg-slate-800 rounded-xl p-1 shadow-inner border border-gray-100 dark:border-white/5 ${isCollapsed ? "justify-center" : "justify-between"}`}>
+           {!isCollapsed ? (
+             <>
+               <button 
+                onClick={() => setTheme("light")}
+                className={`flex-1 flex items-center justify-center space-x-2 py-1.5 rounded-lg transition-all ${theme === 'light' ? 'bg-primary text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}
+               >
+                 <Sun className="w-3.5 h-3.5" />
+                 <span className="text-[10px] font-black uppercase">Light</span>
+               </button>
+               <button 
+                onClick={() => setTheme("dark")}
+                className={`flex-1 flex items-center justify-center space-x-2 py-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-primary text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}
+               >
+                 <Moon className="w-3.5 h-3.5" />
+                 <span className="text-[10px] font-black uppercase">Dark</span>
+               </button>
+             </>
+           ) : (
+             <button 
+              onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+              className="w-10 h-10 flex items-center justify-center rounded-lg text-primary hover:bg-primary/5 transition-all"
+             >
+               {theme === 'light' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+             </button>
+           )}
+        </div>
+
+        <div className={`flex items-center ${isCollapsed ? "justify-center" : "bg-white dark:bg-slate-800 p-3 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5"}`}>
+          <div className="flex items-center min-w-0">
+            <Avatar name={user?.name || ""} url={user?.avatar_url} size={isCollapsed ? "sm" : "sm"} className="ring-2 ring-primary/10" />
             {!isCollapsed && (
               <div className="ml-3 overflow-hidden">
-                <p className="text-sm font-bold text-text-primary truncate">
+                <p className="text-xs font-black text-text-primary truncate">
                   {user?.name}
                 </p>
-                <RoleBadge role={user?.role || "employee"} />
+                <div className="flex items-center space-x-1">
+                  <div className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />
+                  <span className="text-[9px] font-bold text-text-muted uppercase tracking-tighter">Online</span>
+                </div>
               </div>
             )}
           </div>
           {!isCollapsed && (
             <button
               onClick={handleLogout}
-              className="p-1.5 text-text-muted hover:text-danger hover:bg-danger/10 rounded-lg transition-colors"
+              className="ml-auto p-2 text-text-muted hover:text-danger hover:bg-danger/5 rounded-xl transition-all group"
+              title="Logout"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
             </button>
           )}
         </div>
 
-        {!isCollapsed && (
-          <div className="text-center pt-2 border-t border-border dark:border-white/10">
-            <p className="text-[10px] font-black text-text-muted uppercase tracking-widest">
-              v{APP_VERSION}
-            </p>
-          </div>
-        )}
-
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute -right-3 top-[74px] w-6 h-6 bg-white dark:bg-primary border border-border dark:border-primary rounded-full flex items-center justify-center shadow-sm hover:bg-gray-50 transition-colors z-40 text-text-primary dark:text-white"
-        >
-          {isCollapsed ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
-            <ChevronLeft className="w-4 h-4" />
-          )}
-        </button>
+        <div className="mt-4 flex flex-col items-center">
+          <p className="text-[9px] font-black text-text-muted/40 uppercase tracking-[0.3em]">
+            v{APP_VERSION}
+          </p>
+        </div>
       </div>
+
+      {/* Collapse Trigger - Refined */}
+      <button
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className="absolute -right-3 top-10 w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center shadow-lg shadow-primary/30 hover:scale-110 active:scale-95 transition-all z-50 border-2 border-white dark:border-slate-900"
+      >
+        {isCollapsed ? (
+          <ChevronRight className="w-3 h-3" />
+        ) : (
+          <ChevronLeft className="w-3 h-3" />
+        )}
+      </button>
     </div>
   );
 };
