@@ -131,7 +131,7 @@ const Reports: React.FC = () => {
       const stats = [
         {
           label: "Total Hours (Week)",
-          value: totalHours.toFixed(1),
+          value: totalHours.toFixed(2),
           sub: "Active tracking",
           up: true,
         },
@@ -170,7 +170,7 @@ const Reports: React.FC = () => {
             task: t.title,
             project: t.project_name,
             status: t.status,
-            hours: ((t.total_minutes_logged || 0) / 60).toFixed(1),
+            hours: ((t.total_minutes_logged || 0) / 60).toFixed(2),
           };
         }),
       });
@@ -191,23 +191,12 @@ const Reports: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center space-x-3">
-          <button className="btn-secondary flex items-center">
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
-          </button>
-          <div className="relative">
-            <select
-              className="input pr-10 appearance-none font-bold text-sm"
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-            >
-              <option>Today</option>
-              <option>This Week</option>
-              <option>This Month</option>
-              <option>Custom Range</option>
-            </select>
-            <CalendarIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-          </div>
+          {user?.role === "admin" && (
+            <button className="btn-secondary flex items-center">
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </button>
+          )}
         </div>
       </div>
 
@@ -272,6 +261,7 @@ const Reports: React.FC = () => {
                     color: "var(--text-primary)",
                     boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
                   }}
+                  formatter={(value: number) => [value.toFixed(2), "Hours"]}
                 />
                 <Bar
                   dataKey="hours"

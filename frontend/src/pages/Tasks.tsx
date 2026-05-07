@@ -1321,7 +1321,7 @@ const Tasks: React.FC = () => {
                     onChange={(e) =>
                       updateStatus(selectedTask.id, e.target.value)
                     }
-                    className="w-full h-14 px-5  rounded-2xl font-black text-xs uppercase tracking-widest outline-none ring-primary/10 focus:ring-4 transition-all appearance-none cursor-pointer  text-text-primary dark:text-white"
+                    className="w-full h-14 px-5 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-2xl font-black text-xs uppercase tracking-widest outline-none ring-primary/10 focus:ring-4 transition-all appearance-none cursor-pointer text-text-primary dark:text-white"
                   >
                     <option value="todo" className="dark:bg-slate-900">
                       To Do
@@ -1341,7 +1341,7 @@ const Tasks: React.FC = () => {
                   <label className="text-[10px] font-black text-text-muted uppercase tracking-widest">
                     Assigned To
                   </label>
-                  <div className="flex items-center space-x-4 h-14 px-5  rounded-2xl">
+                  <div className="flex items-center space-x-4 h-14 px-5 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-2xl">
                     <Avatar name={selectedTask.assignee_name} size="xs" />
                     <span className="text-sm font-bold text-text-primary">
                       {selectedTask.assignee_name}
@@ -1354,7 +1354,7 @@ const Tasks: React.FC = () => {
                 <h3 className="text-xs font-black text-text-muted uppercase tracking-widest">
                   Mission Description
                 </h3>
-                <div className=" p-8 rounded-[32px] text-text-secondary dark:text-white/60 leading-relaxed font-medium whitespace-pre-wrap">
+                <div className="p-8 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-[32px] text-text-secondary dark:text-white/60 leading-relaxed font-medium whitespace-pre-wrap">
                   {selectedTask.description ||
                     "No description provided for this mission."}
                 </div>

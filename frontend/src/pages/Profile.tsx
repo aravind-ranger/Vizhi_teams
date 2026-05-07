@@ -6,7 +6,6 @@ import {
   Mail,
   Building,
   Briefcase,
-  Camera,
   ChevronRight,
   Lock,
 } from "lucide-react";
@@ -100,9 +99,6 @@ const Profile: React.FC = () => {
                 size="xl"
                 className="ring-8 ring-white dark:ring-white/10 shadow-xl"
               />
-              <button className="absolute bottom-2 right-2 p-3 bg-primary text-white rounded-2xl shadow-lg hover:scale-110 active:scale-95 transition-all">
-                <Camera className="w-4 h-4" />
-              </button>
             </div>
             <h3 className="text-xl font-black text-text-primary mb-1">
               {user?.name}

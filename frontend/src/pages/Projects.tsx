@@ -232,7 +232,7 @@ const Projects: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {[1, 2, 3].map(i => <div key={i} className="skeleton h-80 rounded-[40px]" />)}
         </div>
-      ) : (
+      ) : view === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredProjects.map((project) => {
             const isMember = user?.role === 'admin' || project.members?.includes(user?.id || '');
@@ -347,6 +347,130 @@ const Projects: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      ) : (
+        <div className="glass rounded-[40px] shadow-sm bg-white/40 dark:bg-white/5 border border-gray-200 dark:border-white/10 overflow-hidden">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-white/20 text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
+                <th className="px-8 py-6">Project Info</th>
+                <th className="px-8 py-6">Status</th>
+                <th className="px-8 py-6">Progress</th>
+                <th className="px-8 py-6 text-right">Team</th>
+                <th className="px-8 py-6"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredProjects.map((project) => {
+                const isMember = user?.role === 'admin' || project.members?.includes(user?.id || '');
+                return (
+                  <tr
+                    key={project.id}
+                    onClick={() => {
+                      if (isMember) {
+                        navigate(`/projects/${project.id}`);
+                      } else {
+                        toast.error("You are not assigned to this project.");
+                      }
+                    }}
+                    className={`border-b border-white/10 hover:bg-white/60 dark:hover:bg-white/5 transition-all cursor-pointer group ${!isMember ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  >
+                    <td className="px-8 py-6">
+                      <div className="flex items-center space-x-4">
+                        <div className="p-3 bg-primary/10 rounded-2xl">
+                          <Briefcase className="w-5 h-5 text-primary" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-black text-text-primary group-hover:text-primary transition-colors flex items-center">
+                            {project.name}
+                            {!isMember && <Lock className="w-3 h-3 ml-2 text-text-muted" />}
+                          </span>
+                          <span className="text-xs text-text-muted font-medium line-clamp-1 mt-0.5">
+                            {project.description}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${statusColors[project.status]}`}>
+                        {project.status.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center space-x-3 w-40">
+                        <ProgressBar
+                          progress={(project.completed_tasks / project.total_tasks) * 100}
+                          className="h-1.5 flex-1"
+                        />
+                        <span className="text-[10px] font-black text-text-muted">
+                          {Math.round((project.completed_tasks / project.total_tasks) * 100 || 0)}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex -space-x-2 justify-end">
+                        {project.members?.slice(0, 4).map((mId, i) => {
+                          const emp = employees.find(e => e.id === mId);
+                          return (
+                            <Avatar key={i} name={emp?.name || 'User'} size="xs" className="ring-2 ring-white dark:ring-slate-900" />
+                          );
+                        })}
+                        {project.members?.length > 4 && (
+                          <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center text-[10px] font-bold text-text-muted ring-2 ring-white dark:ring-slate-900">
+                            +{project.members.length - 4}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-8 py-6 text-right">
+                      {user?.role === 'admin' && (
+                        <div className="relative inline-block text-left">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(openMenuId === project.id ? null : project.id);
+                            }}
+                            className={`p-2 rounded-lg text-text-muted transition-all ${openMenuId === project.id ? 'bg-gray-100 dark:bg-white/10 text-primary' : 'hover:bg-gray-100 dark:hover:bg-white/5'}`}
+                          >
+                            <MoreVertical className="w-5 h-5" />
+                          </button>
+                          {openMenuId === project.id && (
+                            <div className="absolute right-full mr-2 top-0 w-48 bg-white dark:bg-glass rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-gray-100 dark:border-white/10 py-2 z-[100] animate-in slide-in-from-right-2 fade-in duration-200">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedProject(project);
+                                  setSelectedMembers(project.members);
+                                  setShowEditModal(true);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full text-left px-5 py-3 text-sm font-bold text-text-secondary hover:bg-primary/5 hover:text-primary transition-all flex items-center"
+                              >
+                                <Layout className="w-4 h-4 mr-3" />
+                                Edit Project
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setProjectToDelete(project);
+                                  setShowDeleteModal(true);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full text-left px-5 py-3 text-sm font-bold text-danger hover:bg-danger/5 transition-all flex items-center"
+                              >
+                                <Lock className="w-4 h-4 mr-3" />
+                                Delete Project
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 

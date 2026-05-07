@@ -77,6 +77,7 @@ const Dashboard: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [tasks, setTasks] = useState<any[]>([]);
+  const [allTasksRaw, setAllTasksRaw] = useState<any[]>([]);
   const [absentEmployees, setAbsentEmployees] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentStatus, setCurrentStatus] = useState(
@@ -121,8 +122,11 @@ const Dashboard: React.FC = () => {
           : new Date(doc.data().created_at),
       }));
 
+      setAllTasksRaw(allTasks);
+
       setTasks(
         allTasks
+          .filter((t: any) => t.status === "in_progress")
           .sort((a: any, b: any) => b.created_at - a.created_at)
           .slice(0, 3),
       );
@@ -132,7 +136,7 @@ const Dashboard: React.FC = () => {
         total_tasks: snap.size,
         in_progress: allTasks.filter((t: any) => t.status === "in_progress")
           .length,
-        completed: allTasks.filter((t: any) => t.status === "done").length,
+        completed: allTasks.filter((t: any) => ["done", "completed"].includes(t.status)).length,
       }));
     });
 
@@ -324,7 +328,7 @@ const Dashboard: React.FC = () => {
 
     const calculatePerformance = async () => {
       try {
-        const userTasks = tasks;
+        const userTasks = allTasksRaw;
 
         if (userTasks.length === 0) {
           setEfficiency(0);
@@ -338,8 +342,8 @@ const Dashboard: React.FC = () => {
         }
 
         // 1. Task Completion Rate (0-40 points)
-        const completedCount = userTasks.filter(
-          (t) => t.status === "done",
+        const completedCount = userTasks.filter((t) =>
+          ["done", "completed"].includes(t.status),
         ).length;
         const completionRate = (completedCount / userTasks.length) * 100;
         const completionScore = (completionRate / 100) * 40;
@@ -348,8 +352,8 @@ const Dashboard: React.FC = () => {
         const highPriorityTasks = userTasks.filter(
           (t) => t.priority === "high",
         );
-        const completedHighPriority = highPriorityTasks.filter(
-          (t) => t.status === "done",
+        const completedHighPriority = highPriorityTasks.filter((t) =>
+          ["done", "completed"].includes(t.status),
         ).length;
         const priorityScore =
           highPriorityTasks.length > 0
@@ -359,7 +363,7 @@ const Dashboard: React.FC = () => {
         // 3. On-Time Completion (0-20 points)
         const tasksWithDueDate = userTasks.filter((t) => t.due_date);
         const onTimeCompletions = tasksWithDueDate.filter((t) => {
-          if (t.status !== "done") return false;
+          if (!["done", "completed"].includes(t.status)) return false;
           const dueDate = new Date(t.due_date).getTime();
           const completedDate = t.updated_at
             ? new Date(t.updated_at).getTime()
@@ -398,8 +402,8 @@ const Dashboard: React.FC = () => {
           }));
 
           if (otherUserTasks.length > 0) {
-            const otherCompleted = otherUserTasks.filter(
-              (t) => t.status === "done",
+            const otherCompleted = otherUserTasks.filter((t) =>
+              ["done", "completed"].includes(t.status),
             ).length;
             const otherScore = (otherCompleted / otherUserTasks.length) * 100;
             teamPerformances.push(otherScore);
@@ -437,7 +441,7 @@ const Dashboard: React.FC = () => {
     };
 
     calculatePerformance();
-  }, [user?.id, stats, tasks, attendance]);
+  }, [user?.id, stats, allTasksRaw, attendance]);
 
   const formatTimeLeft = (seconds: number) => {
     const isOvertime = seconds < 0;

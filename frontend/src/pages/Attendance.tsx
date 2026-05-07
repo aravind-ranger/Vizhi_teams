@@ -162,6 +162,11 @@ const Attendance: React.FC = () => {
     );
   };
 
+  const totalWeekDaysInMonth = days.filter(
+    (d) => d.getDay() !== 0 && d.getDay() !== 6,
+  ).length;
+  const monthlyTargetHours = totalWeekDaysInMonth * 8;
+
   return (
     <div className="space-y-10 animate-slide-up max-w-[1400px] mx-auto">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -276,6 +281,52 @@ const Attendance: React.FC = () => {
                     {stats.avg_hours}h
                   </p>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="glass p-8 rounded-[40px] border-none shadow-sm bg-gradient-to-br from-indigo-500/5 to-purple-500/5">
+            <h3 className="text-xl font-black mb-8">Work Hour Goal</h3>
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-text-muted">
+                  Target: {monthlyTargetHours}h / Month
+                </span>
+                {(() => {
+                  const isCurrentMonth = isSameDay(startOfMonth(new Date()), monthStart);
+                  const hoursLogged = Math.floor(stats.total_minutes / 60);
+                  const isGoalAchieved = hoursLogged >= monthlyTargetHours;
+                  
+                  let label = "In Progress";
+                  let color = "text-primary bg-primary/10";
+                  
+                  if (isGoalAchieved) {
+                    label = "Goal Achieved";
+                    color = "text-success bg-success/10";
+                  } else if (!isCurrentMonth) {
+                    label = "Goal Missed";
+                    color = "text-danger bg-danger/10";
+                  }
+
+                  return (
+                    <span className={`text-[10px] font-black ${color} px-3 py-1.5 rounded-xl uppercase tracking-widest`}>
+                      {label}
+                    </span>
+                  );
+                })()}
+              </div>
+              <ProgressBar
+                progress={Math.min(
+                  100,
+                  (stats.total_minutes / (monthlyTargetHours * 60)) * 100,
+                )}
+                className="h-3 rounded-full bg-gray-100 dark:bg-white/5"
+              />
+              <div className="flex justify-between items-center text-[10px] font-black text-text-muted uppercase tracking-widest">
+                <span>{Math.floor(stats.total_minutes / 60)}h Logged</span>
+                <span>
+                  {Math.max(0, monthlyTargetHours - Math.floor(stats.total_minutes / 60))}h Left
+                </span>
               </div>
             </div>
           </div>

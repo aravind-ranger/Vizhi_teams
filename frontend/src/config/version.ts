@@ -1,7 +1,22 @@
 // Application versioning and release notes
-export const APP_VERSION = "1.0.1";
+export const APP_VERSION = "1.0.2";
 
 export const RELEASE_NOTES = [
+  {
+    version: "1.0.2",
+    date: "May 7, 2026",
+    title: "Analytics & Productivity Optimization",
+    changes: [
+      "Enhanced Attendance module with a dynamic 'Monthly Work Hour Goal' based on total working days",
+      "Corrected Dashboard performance scoring to include all completed task types (Done & Completed)",
+      "Refined Dashboard 'Active Tasks' to focus exclusively on 'In Progress' items",
+      "Restricted Reports CSV export functionality to Admin users only",
+      "Streamlined Reports UI by removing redundant date filters and standardizing decimal precision",
+      "Professionalized Profile view by removing the photo upload overlay for a cleaner aesthetic",
+      "Fixed dark mode legibility for task detail fields and dropdown containers",
+      "Finalized Project List view with full responsive support and administrative actions",
+    ],
+  },
   {
     version: "1.0.1",
     date: "May 7, 2026",
