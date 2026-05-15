@@ -105,7 +105,7 @@ const Projects: React.FC = () => {
       return;
     }
     try {
-      await addDoc(collection(db, 'projects'), {
+      const projectRef = await addDoc(collection(db, 'projects'), {
         ...newProject,
         end_date: newProject.deadline,
         members: selectedMembers,
@@ -114,6 +114,53 @@ const Projects: React.FC = () => {
         created_at: serverTimestamp(),
         created_by: user?.id
       });
+
+      // Create deadline notification if deadline is within 3 days
+      if (newProject.deadline) {
+        const now = new Date();
+        const endDate = new Date(newProject.deadline);
+        const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+        const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const diffMs = endDay.getTime() - todayDay.getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDays >= 0 && diffDays <= 3) {
+          const endDateStr = endDay.toLocaleDateString();
+          const notificationMsg = `Project "${newProject.name}" is due in ${diffDays} day${diffDays > 1 ? 's' : ''} (${endDateStr}). Please review your tasks.`;
+          
+          // Send notification to assigned members
+          for (const memberId of selectedMembers) {
+            await addDoc(collection(db, 'notifications'), {
+              user_id: memberId,
+              title: `Project deadline: ${newProject.name}`,
+              message: notificationMsg,
+              type: 'warning',
+              link: `/projects/${projectRef.id}`,
+              is_read: false,
+              created_at: new Date()
+            });
+          }
+
+          // Also notify all admins
+          try {
+            const adminsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
+            for (const adminDoc of adminsSnap.docs) {
+              await addDoc(collection(db, 'notifications'), {
+                user_id: adminDoc.id,
+                title: `Project deadline: ${newProject.name}`,
+                message: notificationMsg,
+                type: 'warning',
+                link: `/projects/${projectRef.id}`,
+                is_read: false,
+                created_at: new Date()
+              });
+            }
+          } catch (err) {
+            console.error('Failed to notify admins', err);
+          }
+        }
+      }
+
       toast.success('Project created and members assigned!');
       setShowCreateModal(false);
       setNewProject({ name: '', description: '', deadline: '', status: 'todo' });
@@ -135,6 +182,53 @@ const Projects: React.FC = () => {
         status: selectedProject.status,
         end_date: selectedProject.end_date
       });
+
+      // Notify if deadline was changed to within 3 days
+      if (selectedProject.end_date) {
+        const now = new Date();
+        const endDate = new Date(selectedProject.end_date);
+        const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+        const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const diffMs = endDay.getTime() - todayDay.getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDays >= 0 && diffDays <= 3) {
+          const endDateStr = endDay.toLocaleDateString();
+          const notificationMsg = `Project "${selectedProject.name}" deadline updated - due in ${diffDays} day${diffDays > 1 ? 's' : ''} (${endDateStr}). Please review your tasks.`;
+          
+          // Notify assigned members
+          for (const memberId of selectedMembers) {
+            await addDoc(collection(db, 'notifications'), {
+              user_id: memberId,
+              title: `Project deadline updated: ${selectedProject.name}`,
+              message: notificationMsg,
+              type: 'warning',
+              link: `/projects/${selectedProject.id}`,
+              is_read: false,
+              created_at: new Date()
+            });
+          }
+
+          // Notify admins
+          try {
+            const adminsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
+            for (const adminDoc of adminsSnap.docs) {
+              await addDoc(collection(db, 'notifications'), {
+                user_id: adminDoc.id,
+                title: `Project deadline updated: ${selectedProject.name}`,
+                message: notificationMsg,
+                type: 'warning',
+                link: `/projects/${selectedProject.id}`,
+                is_read: false,
+                created_at: new Date()
+              });
+            }
+          } catch (err) {
+            console.error('Failed to notify admins', err);
+          }
+        }
+      }
+
       toast.success('Project updated successfully!');
       setShowEditModal(false);
       fetchProjects();
@@ -478,7 +572,7 @@ const Projects: React.FC = () => {
       {showCreateModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowCreateModal(false)} />
-          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-2xl rounded-[40px] p-10 shadow-2xl animate-scale-up overflow-y-auto max-h-[90vh]">
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-2xl rounded-[40px] p-10 shadow-2xl animate-scale-up overflow-y-auto scrollbar-hide max-h-[90vh]">
             <h2 className="text-3xl font-black text-text-primary mb-8">Create New Project</h2>
 
             <div className="space-y-6">
@@ -577,7 +671,7 @@ const Projects: React.FC = () => {
       {showEditModal && selectedProject && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowEditModal(false)} />
-          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-2xl rounded-[40px] p-10 shadow-2xl animate-scale-up overflow-y-auto max-h-[90vh]">
+          <div className="relative bg-white dark:bg-glass dark:border dark:border-white/10 w-full max-w-2xl rounded-[40px] p-10 shadow-2xl animate-scale-up overflow-y-auto scrollbar-hide max-h-[90vh]">
             <h2 className="text-3xl font-black text-text-primary mb-8">Edit Project</h2>
             <div className="space-y-6">
               <div className="space-y-2">

@@ -286,7 +286,7 @@ const Leaves: React.FC = () => {
                 filteredLeaves.map((leave) => (
                   <tr
                     key={leave.id}
-                    className="border-b border-white/10 hover:bg-white/50 transition-colors"
+                    className="border-b border-white/10 hover:bg-gray-50 dark:hover:bg-white/10 transition-colors"
                   >
                     {activeTab === "all" && (
                       <td className="px-6 py-4">
@@ -322,7 +322,7 @@ const Leaves: React.FC = () => {
                           setSelectedLeave(leave);
                           setShowApprovalModal(true);
                         }}
-                        className="p-2 bg-gray-50 dark:bg-white/5 text-text-muted rounded-lg hover:bg-primary/10 hover:text-primary transition-all"
+                        className="p-2 bg-gray-50 dark:bg-white/5 text-text-muted rounded-lg hover:bg-primary/10 dark:hover:bg-white/10 hover:text-primary transition-all"
                       >
                         <FileText className="w-4 h-4" />
                       </button>

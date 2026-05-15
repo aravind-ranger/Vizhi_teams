@@ -66,6 +66,20 @@
   }
 }
 
+/* Ensure native select option visibility in dark mode */
+.dark select,
+.dark select option {
+  background-color: rgb(var(--glass) / 1);
+  color: rgb(var(--text-primary) / 1);
+}
+
+/* Also ensure options in light mode use readable colors */
+select,
+select option {
+  background-color: rgb(var(--glass) / 1);
+  color: rgb(var(--text-primary) / 1);
+}
+
 @layer utilities {
   .scrollbar-hide {
     -ms-overflow-style: none;

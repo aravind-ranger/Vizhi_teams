@@ -1,7 +1,16 @@
 // Application versioning and release notes
-export const APP_VERSION = "1.0.2";
+export const APP_VERSION = "1.0.3";
 
 export const RELEASE_NOTES = [
+  {
+    version: "1.0.3",
+    date: "May 15, 2026",
+    title: "Advanced Report's & Admin Insights",
+    changes: [
+      "Added advanced Reports dashboard for admins with team productivity, absence tracking, and project progress",
+      "Fixed dark-mode hover contrast across the site",
+    ],
+  },
   {
     version: "1.0.2",
     date: "May 7, 2026",

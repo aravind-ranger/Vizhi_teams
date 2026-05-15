@@ -416,7 +416,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
                     return todayNotifs.map((n) => (
                       <div
                         key={n.id}
-                        className={`p-4 border-b border-border transition-colors cursor-pointer ${!n.is_read ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-gray-50"}`}
+                        className={`p-4 border-b border-border dark:border-white/5 transition-colors cursor-pointer ${!n.is_read ? "bg-primary/5 dark:bg-primary/10 hover:bg-primary/10 dark:hover:bg-white/10" : "hover:bg-gray-50 dark:hover:bg-white/10"}`}
                         onClick={async () => {
                           if (!n.is_read) {
                             try {
