@@ -294,6 +294,7 @@ const Attendance: React.FC = () => {
                 </span>
                 {(() => {
                   const isCurrentMonth = isSameDay(startOfMonth(new Date()), monthStart);
+                  const isPastMonth = monthEnd < new Date();
                   const hoursLogged = Math.floor(stats.total_minutes / 60);
                   const isGoalAchieved = hoursLogged >= monthlyTargetHours;
                   
@@ -303,9 +304,12 @@ const Attendance: React.FC = () => {
                   if (isGoalAchieved) {
                     label = "Goal Achieved";
                     color = "text-success bg-success/10";
-                  } else if (!isCurrentMonth) {
+                  } else if (!isCurrentMonth && isPastMonth) {
                     label = "Goal Missed";
                     color = "text-danger bg-danger/10";
+                  } else if (!isCurrentMonth && !isPastMonth) {
+                    label = "Upcoming";
+                    color = "text-info bg-blue-500/10";
                   }
 
                   return (

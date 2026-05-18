@@ -12,14 +12,14 @@ const Login: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
-  const { setAuth, token } = useAuthStore();
+  const { setAuth, user } = useAuthStore();
   const navigate = useNavigate();
 
   React.useEffect(() => {
-    if (token) {
+    if (user) {
       navigate('/');
     }
-  }, [token, navigate]);
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,8 +39,6 @@ const Login: React.FC = () => {
 
       if (userDoc.exists()) {
         const userData = userDoc.data() as any;
-        const token = await firebaseUser.getIdToken();
-
         setAuth({
           id: firebaseUser.uid,
           name: userData.name || firebaseUser.displayName || 'User',
@@ -50,7 +48,7 @@ const Login: React.FC = () => {
           avatar_url: userData.avatar_url || firebaseUser.photoURL || undefined,
           is_active: userData.is_active ?? true,
           is_verified: userData.is_verified ?? true,
-        }, token);
+        });
 
         toast.success(`Welcome back, ${userData.name?.split(' ')[0] || 'User'}!`);
         navigate('/');

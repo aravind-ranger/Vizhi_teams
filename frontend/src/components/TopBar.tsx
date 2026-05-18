@@ -676,7 +676,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
                     await checkIn(loc.id);
                     setShowCheckInModal(false);
                   }}
-                  className="flex items-center space-x-6 p-6 rounded-3xl border-2 border-transparent hover:border-primary/20 hover:bg-gray-50 transition-all group"
+                  className="flex items-center space-x-6 p-6 rounded-3xl border-2 border-transparent hover:border-primary/20 hover:bg-gray-50 dark:hover:bg-white/10 transition-all group"
                 >
                   <div
                     className={`p-4 rounded-2xl ${loc.bg} group-hover:scale-110 transition-transform`}

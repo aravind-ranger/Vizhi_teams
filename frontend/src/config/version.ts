@@ -1,7 +1,21 @@
 // Application versioning and release notes
-export const APP_VERSION = "1.0.3";
+export const APP_VERSION = "1.1.0";
 
 export const RELEASE_NOTES = [
+  {
+    version: "1.1.0",
+    date: "May 18, 2026",
+    title: "Security Hardening & Data Export",
+    changes: [
+      "Removed localStorage token storage: Firebase ID tokens now fetched at request time, eliminating XSS attack vectors",
+      "Implemented strict Content-Security-Policy meta tag to reduce XSS attack surface",
+      "Enhanced logout flow to properly sign out from Firebase and clear persisted sessions",
+      "Added CSV export functionality: Admin can now export task, project, and report data for offline analysis",
+      "Refactored AuthState: Removed token field, managed token lifecycle exclusively via Firebase SDK",
+      "Updated API interceptor to attach Firebase tokens at request time with automatic expiry refresh",
+      "All protected routes now check user state instead of token for clarity and maintainability",
+    ],
+  },
   {
     version: "1.0.3",
     date: "May 15, 2026",

@@ -14,7 +14,6 @@ export interface User {
 
 export interface AuthState {
   user: User | null;
-  token: string | null;
-  setAuth: (user: User, token: string) => void;
-  logout: () => void;
+  setAuth: (user: User) => void;
+  logout: () => Promise<void>;
 }

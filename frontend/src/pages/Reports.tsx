@@ -38,6 +38,7 @@ import {
   subMonths,
 } from "date-fns";
 import { useTitle } from "../hooks/useTitle";
+import { exportAdminReportCSV } from "../utils/csvExport";
 
 import { db } from "../firebase";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
@@ -65,11 +66,11 @@ const Reports: React.FC = () => {
     employeeMetrics: [] as any[],
   });
   const [adminMonth, setAdminMonth] = useState<Date>(startOfMonth(new Date()));
-  const [showExportModal, setShowExportModal] = useState(false);
   useTitle("Reports");
 
   const handleExportCsvClick = () => {
-    setShowExportModal(true);
+    const monthStr = format(adminMonth, "MMM-yyyy");
+    exportAdminReportCSV(adminData, monthStr);
   };
 
   useEffect(() => {
@@ -562,7 +563,7 @@ const Reports: React.FC = () => {
                 </button>
               </div>
             )}
-            {user?.role === "admin" && (
+            {user?.role === "admin" && viewMode === "admin" && (
               <button
                 onClick={handleExportCsvClick}
                 className="btn-secondary flex items-center"
@@ -625,14 +626,14 @@ const Reports: React.FC = () => {
                 </div>
 
                 {/* Charts Grid */}
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-stretch">
                   {/* Company Productivity Trend */}
-                  <div className="card p-8 h-full flex flex-col">
-                    <h3 className="text-lg font-bold text-text-primary mb-8">
+                  <div className="card p-8 h-auto flex flex-col self-stretch">
+                    <h3 className="text-lg font-bold text-text-primary mb-6">
                       Team Engagement Trend
                     </h3>
-                    <div className="h-72 w-full flex-shrink-0">
-                      <ResponsiveContainer width="100%" height={288}>
+                    <div className="w-full flex-shrink-0">
+                      <ResponsiveContainer width="100%" height={240}>
                         <LineChart data={adminData.companyTrend}>
                           <CartesianGrid
                             strokeDasharray="3 3"
@@ -683,7 +684,7 @@ const Reports: React.FC = () => {
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 flex-shrink-0">
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 flex-shrink-0">
                       {(() => {
                         const trend = adminData.companyTrend;
                         const bestDay = trend.reduce(
@@ -750,64 +751,14 @@ const Reports: React.FC = () => {
                         ));
                       })()}
                     </div>
-                    <div className="mt-6 flex-1 rounded-3xl border border-border/60 dark:border-white/10 bg-white/50 dark:bg-white/5 p-4">
-                      <div className="flex items-center justify-between gap-4 mb-4">
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-text-muted">
-                            Daily Breakdown
-                          </p>
-                          <p className="text-sm font-bold text-text-primary mt-1">
-                            Check-ins and productivity across the selected week
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-text-muted">
-                            Week Avg
-                          </p>
-                          <p className="text-2xl font-black text-primary">
-                            {adminData.companyTrend.length
-                              ? Math.round(
-                                  adminData.companyTrend.reduce(
-                                    (sum, item) =>
-                                      sum + (item.productivity || 0),
-                                    0,
-                                  ) / adminData.companyTrend.length,
-                                )
-                              : 0}
-                            %
-                          </p>
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        {adminData.companyTrend.map((day, index) => (
-                          <div
-                            key={`${day.name}-${index}`}
-                            className="flex items-center gap-3"
-                          >
-                            <div className="w-12 text-xs font-black uppercase tracking-widest text-text-muted">
-                              {day.name}
-                            </div>
-                            <div className="flex-1 h-2 rounded-full bg-white/70 dark:bg-white/10 overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600"
-                                style={{ width: `${day.productivity}%` }}
-                              />
-                            </div>
-                            <div className="w-20 text-right text-xs font-bold text-text-secondary">
-                              {day.checkIns} in · {day.productivity}%
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
                   </div>
 
                   {/* Project Status Distribution */}
-                  <div className="card p-8 flex flex-col">
-                    <h3 className="text-lg font-bold text-text-primary mb-8">
+                  <div className="card p-8 h-auto flex flex-col self-stretch">
+                    <h3 className="text-lg font-bold text-text-primary mb-6">
                       Project Progress Overview
                     </h3>
-                    <div className="space-y-4 flex-1 overflow-y-auto scrollbar-hide">
+                    <div className="space-y-4 overflow-y-auto scrollbar-hide max-h-[420px]">
                       {adminData.projectProgress.map((proj, i) => (
                         <div key={i} className="space-y-2">
                           <div className="flex items-center justify-between">
@@ -1007,13 +958,13 @@ const Reports: React.FC = () => {
             </div>
 
             {/* Charts Grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-              <div className="card p-8">
-                <h3 className="text-lg font-bold text-text-primary mb-8">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-stretch">
+              <div className="card p-8 h-auto flex flex-col self-stretch">
+                <h3 className="text-lg font-bold text-text-primary mb-6">
                   Weekly Work Hours
                 </h3>
-                <div className="h-80 w-full">
-                  <ResponsiveContainer width="100%" height={320}>
+                <div className="w-full flex-shrink-0">
+                  <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={reportData.barData}>
                       <CartesianGrid
                         strokeDasharray="3 3"
@@ -1068,13 +1019,13 @@ const Reports: React.FC = () => {
                 </div>
               </div>
 
-              <div className="card p-8">
-                <h3 className="text-lg font-bold text-text-primary mb-8">
+              <div className="card p-8 h-auto flex flex-col self-stretch">
+                <h3 className="text-lg font-bold text-text-primary mb-6">
                   Task Status Distribution
                 </h3>
-                <div className="h-80 w-full flex items-center">
+                <div className="w-full flex-shrink-0 flex items-center justify-center">
                   {reportData.pieData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={320}>
+                    <ResponsiveContainer width="100%" height={280}>
                       <PieChart>
                         <Pie
                           data={reportData.pieData}
@@ -1106,7 +1057,7 @@ const Reports: React.FC = () => {
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div className="w-full text-center text-text-muted text-sm font-medium italic">
+                    <div className="w-full h-64 flex items-center justify-center text-text-muted text-sm font-medium italic">
                       No task data available for this period.
                     </div>
                   )}
@@ -1179,37 +1130,6 @@ const Reports: React.FC = () => {
           </div>
         )}
       </div>
-      {showExportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-white dark:bg-slate-900 shadow-2xl">
-            <div className="border-b border-border px-6 py-4">
-              <h3 className="text-lg font-bold text-text-primary">
-                Export CSV Coming Soon
-              </h3>
-              <p className="mt-1 text-sm text-text-muted">
-                We are currently working on this feature as part of our ongoing
-                improvements, and it is planned to be included in an upcoming
-                patch release after the completion of development and testing
-                phases.
-              </p>
-            </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4">
-              <button
-                onClick={() => setShowExportModal(false)}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-gray-50 dark:hover:bg-white/5"
-              >
-                Close
-              </button>
-              <button
-                onClick={() => setShowExportModal(false)}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-95"
-              >
-                Understood
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };

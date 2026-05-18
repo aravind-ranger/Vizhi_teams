@@ -38,11 +38,11 @@ const ProtectedRoute = ({
   children: React.ReactNode;
   roles?: string[];
 }) => {
-  const { token, user } = useAuthStore();
+  const { user } = useAuthStore();
   const { isCollapsed } = useSidebarStore();
   const [isFocusMode, setIsFocusMode] = React.useState(false);
 
-  if (!token) return <Navigate to="/login" />;
+  if (!user) return <Navigate to="/login" />;
   if (roles && user && !roles.includes(user.role)) return <Navigate to="/" />;
 
   return (
@@ -76,14 +76,14 @@ const ProtectedRoute = ({
 import { useThemeStore } from "./store/useThemeStore";
 
 function App() {
-  const { setAuth, logout, token } = useAuthStore();
+  const { setAuth, logout, user } = useAuthStore();
   const { theme } = useThemeStore();
   const [loading, setLoading] = React.useState(true);
   const [showReleaseNotes, setShowReleaseNotes] = React.useState(false);
 
   // Show release notes only for authenticated users and only once per version.
   React.useEffect(() => {
-    if (loading || !token) {
+    if (loading || !user) {
       setShowReleaseNotes(false);
       return;
     }
@@ -93,7 +93,7 @@ function App() {
       setShowReleaseNotes(true);
       localStorage.setItem("vizhi_last_version", APP_VERSION);
     }
-  }, [loading, token]);
+  }, [loading, user]);
 
   React.useEffect(() => {
     if (theme === "dark") {
@@ -117,7 +117,6 @@ function App() {
               async (userDoc) => {
                 if (userDoc.exists()) {
                   const userData = userDoc.data();
-                  const token = await firebaseUser.getIdToken();
                   setAuth(
                     {
                       id: firebaseUser.uid,
@@ -134,7 +133,6 @@ function App() {
                       availability_status:
                         userData.availability_status || "available",
                     },
-                    token,
                   );
                   setLoading(false);
                 } else {
@@ -328,7 +326,7 @@ function App() {
 
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
-      {token && (
+      {user && (
         <ReleaseNotesModal
           isOpen={showReleaseNotes}
           onClose={() => setShowReleaseNotes(false)}

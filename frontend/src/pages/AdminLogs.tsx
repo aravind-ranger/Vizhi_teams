@@ -380,9 +380,8 @@ const AdminLogs: React.FC = () => {
                   </td>
                   <td className="px-8 py-6 text-right">
                     {log.shift_minutes ? (
-                      <span className="text-xs font-bold text-text-secondary bg-white/60 dark:bg-white/5 px-3 py-1 rounded-full">
-                        {Math.floor(log.shift_minutes / 60)}h{" "}
-                        {log.shift_minutes % 60}m
+                      <span className="text-xs font-bold text-text-secondary bg-white/60 dark:bg-white/5 px-3 py-1 rounded-full whitespace-nowrap">
+                        {Math.floor(log.shift_minutes / 60)}h {log.shift_minutes % 60}m
                       </span>
                     ) : (
                       "--"
@@ -390,9 +389,8 @@ const AdminLogs: React.FC = () => {
                   </td>
                   <td className="px-8 py-6 text-right">
                     {log.overtime_minutes ? (
-                      <span className="text-xs font-black text-indigo-500 bg-indigo-500/10 px-3 py-1 rounded-full">
-                        {Math.floor(log.overtime_minutes / 60)}h{" "}
-                        {log.overtime_minutes % 60}m
+                      <span className="text-xs font-black text-indigo-500 bg-indigo-500/10 px-3 py-1 rounded-full whitespace-nowrap">
+                        {Math.floor(log.overtime_minutes / 60)}h {log.overtime_minutes % 60}m
                       </span>
                     ) : (
                       "--"
