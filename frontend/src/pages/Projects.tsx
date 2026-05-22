@@ -21,7 +21,7 @@ interface Project {
   total_tasks: number;
   completed_tasks: number;
   start_date: string;
-  end_date: string;
+  end_date?: string;
   members: string[];
   created_at?: any;
 }
@@ -180,7 +180,7 @@ const Projects: React.FC = () => {
         description: selectedProject.description,
         members: selectedMembers,
         status: selectedProject.status,
-        end_date: selectedProject.end_date
+        end_date: selectedProject.end_date ?? ''
       });
 
       // Notify if deadline was changed to within 3 days
@@ -368,8 +368,8 @@ const Projects: React.FC = () => {
                           <button 
                             onClick={(e) => { 
                               e.stopPropagation(); 
-                              setSelectedProject(project); 
-                              setSelectedMembers(project.members);
+                              setSelectedProject({ ...project, end_date: project.end_date ?? '' }); 
+                              setSelectedMembers(project.members || []);
                               setShowEditModal(true); 
                               setOpenMenuId(null);
                             }}
@@ -533,8 +533,8 @@ const Projects: React.FC = () => {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setSelectedProject(project);
-                                  setSelectedMembers(project.members);
+                                  setSelectedProject({ ...project, end_date: project.end_date ?? '' });
+                                  setSelectedMembers(project.members || []);
                                   setShowEditModal(true);
                                   setOpenMenuId(null);
                                 }}
@@ -689,7 +689,7 @@ const Projects: React.FC = () => {
                   <input
                     type="date"
                     className="w-full h-14 px-6 bg-white dark:bg-white/5 rounded-2xl font-bold text-sm border border-gray-200 dark:border-white/10 focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-text-primary"
-                    value={selectedProject.end_date}
+                    value={selectedProject.end_date ?? ''}
                     onChange={(e) => setSelectedProject({ ...selectedProject, end_date: e.target.value })}
                   />
                 </div>
