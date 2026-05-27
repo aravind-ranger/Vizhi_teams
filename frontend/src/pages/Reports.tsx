@@ -68,6 +68,12 @@ const Reports: React.FC = () => {
   const [adminMonth, setAdminMonth] = useState<Date>(startOfMonth(new Date()));
   useTitle("Reports");
 
+  useEffect(() => {
+    if (user?.role === "admin" && viewMode !== "admin") {
+      setViewMode("admin");
+    }
+  }, [user?.role, viewMode]);
+
   const handleExportCsvClick = () => {
     const monthStr = format(adminMonth, "MMM-yyyy");
     exportAdminReportCSV(adminData, monthStr);
@@ -510,30 +516,6 @@ const Reports: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center space-x-3">
-            {user?.role === "admin" && (
-              <div className="flex gap-2 bg-white/5 dark:bg-white/10 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode("personal")}
-                  className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-                    viewMode === "personal"
-                      ? "bg-primary text-white"
-                      : "text-text-muted hover:text-text-primary"
-                  }`}
-                >
-                  My Report
-                </button>
-                <button
-                  onClick={() => setViewMode("admin")}
-                  className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-                    viewMode === "admin"
-                      ? "bg-primary text-white"
-                      : "text-text-muted hover:text-text-primary"
-                  }`}
-                >
-                  Admin Dashboard
-                </button>
-              </div>
-            )}
             {user?.role === "admin" && viewMode === "admin" && (
               <div className="flex items-center gap-2 rounded-lg bg-white/5 dark:bg-white/10 p-1">
                 <button

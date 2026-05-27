@@ -10,6 +10,7 @@ import {
   FastForward,
   MessageSquare,
   PieChart,
+  ClipboardList,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -120,12 +121,18 @@ const Sidebar: React.FC = () => {
           label: "Reports",
           icon: PieChart,
           path: "/reports",
-          roles: ["admin", "manager", "employee"],
+          roles: ["admin", "manager"],
         },
         {
           label: "Admin Logs",
           icon: FileText,
           path: "/admin-logs",
+          roles: ["admin"],
+        },
+        {
+          label: "Late Check-In Requests",
+          icon: ClipboardList,
+          path: "/late-checkin-requests",
           roles: ["admin"],
         },
       ],
@@ -147,10 +154,16 @@ const Sidebar: React.FC = () => {
     >
       {/* Brand Header */}
       <div className="h-24 flex items-center px-6 border-b border-gray-100 dark:border-white/5 relative">
-        <div className={`flex items-center space-x-3 ${isCollapsed ? "justify-center w-full" : ""}`}>
+        <div
+          className={`flex items-center space-x-3 ${isCollapsed ? "justify-center w-full" : ""}`}
+        >
           {/* Logo container: Always black in light mode, primary/10 in dark mode */}
           <div className="w-10 h-10 bg-black dark:bg-primary/20 rounded-xl flex items-center justify-center p-2 shadow-lg transition-colors overflow-hidden">
-            <img src="/Vizhi_Logo.png" alt="Vizhi" className="w-full h-full object-contain brightness-0 invert" />
+            <img
+              src="/Vizhi_Logo.png"
+              alt="Vizhi"
+              className="w-full h-full object-contain brightness-0 invert"
+            />
           </div>
           {!isCollapsed && (
             <div className="flex flex-col">
@@ -198,9 +211,11 @@ const Sidebar: React.FC = () => {
                       `}
                     />
                     {!isCollapsed && (
-                      <span className="font-bold text-sm tracking-tight">{item.label}</span>
+                      <span className="font-bold text-sm tracking-tight">
+                        {item.label}
+                      </span>
                     )}
-                    
+
                     {/* Tooltip for collapsed mode */}
                     {isCollapsed && (
                       <div className="absolute left-20 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap shadow-xl z-50">
@@ -218,37 +233,50 @@ const Sidebar: React.FC = () => {
       {/* Professional Footer */}
       <div className="p-4 bg-gray-50/50 dark:bg-white/5 border-t border-gray-100 dark:border-white/5">
         {/* Theme Switcher Toggle */}
-        <div className={`mb-4 flex items-center bg-white dark:bg-slate-800 rounded-xl p-1 shadow-inner border border-gray-100 dark:border-white/5 ${isCollapsed ? "justify-center" : "justify-between"}`}>
-           {!isCollapsed ? (
-             <>
-               <button 
+        <div
+          className={`mb-4 flex items-center bg-white dark:bg-slate-800 rounded-xl p-1 shadow-inner border border-gray-100 dark:border-white/5 ${isCollapsed ? "justify-center" : "justify-between"}`}
+        >
+          {!isCollapsed ? (
+            <>
+              <button
                 onClick={() => setTheme("light")}
-                className={`flex-1 flex items-center justify-center space-x-2 py-1.5 rounded-lg transition-all ${theme === 'light' ? 'bg-primary text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}
-               >
-                 <Sun className="w-3.5 h-3.5" />
-                 <span className="text-[10px] font-black uppercase">Light</span>
-               </button>
-               <button 
+                className={`flex-1 flex items-center justify-center space-x-2 py-1.5 rounded-lg transition-all ${theme === "light" ? "bg-primary text-white shadow-sm" : "text-text-muted hover:text-text-secondary"}`}
+              >
+                <Sun className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-black uppercase">Light</span>
+              </button>
+              <button
                 onClick={() => setTheme("dark")}
-                className={`flex-1 flex items-center justify-center space-x-2 py-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-primary text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}
-               >
-                 <Moon className="w-3.5 h-3.5" />
-                 <span className="text-[10px] font-black uppercase">Dark</span>
-               </button>
-             </>
-           ) : (
-             <button 
-              onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                className={`flex-1 flex items-center justify-center space-x-2 py-1.5 rounded-lg transition-all ${theme === "dark" ? "bg-primary text-white shadow-sm" : "text-text-muted hover:text-text-secondary"}`}
+              >
+                <Moon className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-black uppercase">Dark</span>
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
               className="w-10 h-10 flex items-center justify-center rounded-lg text-primary hover:bg-primary/5 transition-all"
-             >
-               {theme === 'light' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-             </button>
-           )}
+            >
+              {theme === "light" ? (
+                <Sun className="w-5 h-5" />
+              ) : (
+                <Moon className="w-5 h-5" />
+              )}
+            </button>
+          )}
         </div>
 
-        <div className={`flex items-center ${isCollapsed ? "justify-center" : "bg-white dark:bg-slate-800 p-3 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5"}`}>
+        <div
+          className={`flex items-center ${isCollapsed ? "justify-center" : "bg-white dark:bg-slate-800 p-3 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5"}`}
+        >
           <div className="flex items-center min-w-0">
-            <Avatar name={user?.name || ""} url={user?.avatar_url} size={isCollapsed ? "sm" : "sm"} className="ring-2 ring-primary/10" />
+            <Avatar
+              name={user?.name || ""}
+              url={user?.avatar_url}
+              size={isCollapsed ? "sm" : "sm"}
+              className="ring-2 ring-primary/10"
+            />
             {!isCollapsed && (
               <div className="ml-3 overflow-hidden">
                 <p className="text-xs font-black text-text-primary truncate">
@@ -256,7 +284,9 @@ const Sidebar: React.FC = () => {
                 </p>
                 <div className="flex items-center space-x-1">
                   <div className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />
-                  <span className="text-[9px] font-bold text-text-muted uppercase tracking-tighter">Online</span>
+                  <span className="text-[9px] font-bold text-text-muted uppercase tracking-tighter">
+                    Online
+                  </span>
                 </div>
               </div>
             )}

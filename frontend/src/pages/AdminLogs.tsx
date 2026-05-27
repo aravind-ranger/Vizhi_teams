@@ -9,6 +9,7 @@ import {
   LogIn,
   LogOut,
   CheckCircle2,
+  X,
 } from "lucide-react";
 import { db } from "../firebase.ts";
 import {
@@ -19,9 +20,12 @@ import {
   where,
   limit,
 } from "firebase/firestore";
+import { getUsersCached } from "../lib/firestoreCache";
 import { useTitle } from "../hooks/useTitle";
 import Avatar from "../components/Avatar";
 import { format } from "date-fns";
+import { attendanceRangeQuery } from "../lib/firestoreQueries";
+import { getDayBounds, parseFirestoreDate } from "../lib/firestoreDates";
 
 interface LogEntry {
   id: string;
@@ -41,9 +45,23 @@ type ActionMeta = {
   icon: React.ReactNode;
 };
 
+interface PresenceLogEntry {
+  user_id: string;
+  user_name: string;
+  role: string;
+  status: "present" | "late_checkin" | "absent";
+  source_status?: string;
+  late_checkin_approved?: boolean;
+  check_in?: Date | null;
+  check_out?: Date | null;
+  duration_minutes?: number;
+}
+
 const AdminLogs: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [presenceLogs, setPresenceLogs] = useState<PresenceLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPresenceLoading, setIsPresenceLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
   const [selectedDate, setSelectedDate] = useState("");
@@ -52,6 +70,79 @@ const AdminLogs: React.FC = () => {
   useEffect(() => {
     fetchLogs();
   }, []);
+
+  useEffect(() => {
+    fetchPresenceLogs();
+  }, [selectedDate]);
+
+  const parseDateField = (value: any): Date | null => {
+    return parseFirestoreDate(value);
+  };
+
+  const fetchPresenceLogs = async () => {
+    setIsPresenceLoading(true);
+    try {
+      const targetDate = selectedDate
+        ? new Date(`${selectedDate}T00:00:00`)
+        : new Date();
+      const { start, end } = getDayBounds(targetDate);
+
+      const users = await getUsersCached();
+      // Include admins as well — previously filtered out admin users here
+      const employees = users.filter((u: any) => u.is_active !== false);
+
+      const attSnap = await getDocs(
+        attendanceRangeQuery(start, end, undefined, 500),
+      );
+
+      const latestByUser = new Map<string, any>();
+      attSnap.docs.forEach((entry) => {
+        const data = entry.data() as any;
+        const createdAt =
+          parseDateField(data.created_at) ||
+          parseDateField(data.check_in) ||
+          new Date(0);
+        const existing = latestByUser.get(data.user_id);
+        if (!existing || createdAt.getTime() > existing.createdAt.getTime()) {
+          latestByUser.set(data.user_id, { data, createdAt });
+        }
+      });
+
+      const rows: PresenceLogEntry[] = employees
+        .map((emp) => {
+          const attendanceEntry = latestByUser.get(emp.id)?.data;
+          const checkIn = parseDateField(attendanceEntry?.check_in);
+          const checkOut = parseDateField(attendanceEntry?.check_out);
+          const sourceStatus = attendanceEntry?.status || "absent";
+          const isLateCheckIn =
+            sourceStatus === "late_checkin" ||
+            attendanceEntry?.late_checkin_approved === true;
+          const resolvedStatus = isLateCheckIn
+            ? "late_checkin"
+            : Boolean(checkIn) && sourceStatus !== "absent"
+              ? "present"
+              : "absent";
+
+          return {
+            user_id: emp.id,
+            user_name: emp.name || "Employee",
+            role: emp.role || "employee",
+            status: resolvedStatus,
+            source_status: sourceStatus,
+            late_checkin_approved: attendanceEntry?.late_checkin_approved,
+            check_in: checkIn,
+            check_out: checkOut,
+            duration_minutes: attendanceEntry?.duration_minutes || 0,
+          };
+        })
+        .sort((a, b) => a.user_name.localeCompare(b.user_name));
+      setPresenceLogs(rows);
+    } catch (err) {
+      console.error("Error fetching presence logs:", err);
+    } finally {
+      setIsPresenceLoading(false);
+    }
+  };
 
   const fetchLogs = async () => {
     setIsLoading(true);
@@ -105,11 +196,41 @@ const AdminLogs: React.FC = () => {
           tone: "bg-green-500/10 text-green-600 dark:text-green-400",
           icon: <LogIn className="w-4 h-4" />,
         };
+      case "late_checkin":
+        return {
+          label: "Late Check-in",
+          tone: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
+          icon: <LogIn className="w-4 h-4" />,
+        };
       case "checkout":
         return {
           label: "Check-out",
           tone: "bg-red-500/10 text-red-600 dark:text-red-400",
           icon: <LogOut className="w-4 h-4" />,
+        };
+      case "auto_absent":
+        return {
+          label: "Auto Absent",
+          tone: "bg-red-500/10 text-red-600 dark:text-red-400",
+          icon: <Clock className="w-4 h-4" />,
+        };
+      case "late_checkin_request":
+        return {
+          label: "Late Request",
+          tone: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+          icon: <Clock className="w-4 h-4" />,
+        };
+      case "late_checkin_approved":
+        return {
+          label: "Late Approved",
+          tone: "bg-green-500/10 text-green-600 dark:text-green-400",
+          icon: <CheckCircle2 className="w-4 h-4" />,
+        };
+      case "late_checkin_rejected":
+        return {
+          label: "Late Rejected",
+          tone: "bg-red-500/10 text-red-600 dark:text-red-400",
+          icon: <X className="w-4 h-4" />,
         };
       case "pause":
       case "task_pause":
@@ -155,6 +276,8 @@ const AdminLogs: React.FC = () => {
 
   const actionTotals = {
     checkin: logs.filter((log) => log.action === "checkin").length,
+    lateCheckin: logs.filter((log) => log.action === "late_checkin").length,
+    autoAbsent: logs.filter((log) => log.action === "auto_absent").length,
     checkout: logs.filter((log) => log.action === "checkout").length,
     breaks: logs.filter(
       (log) =>
@@ -176,8 +299,13 @@ const AdminLogs: React.FC = () => {
     { label: "Total Logs", value: logs.length, accent: "text-text-primary" },
     {
       label: "Check-ins",
-      value: actionTotals.checkin,
+      value: actionTotals.checkin + actionTotals.lateCheckin,
       accent: "text-green-600 dark:text-green-400",
+    },
+    {
+      label: "Auto Absent",
+      value: actionTotals.autoAbsent,
+      accent: "text-red-600 dark:text-red-400",
     },
     {
       label: "Check-outs",
@@ -214,7 +342,7 @@ const AdminLogs: React.FC = () => {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
         {summaryCards.map((card) => (
           <div
             key={card.label}
@@ -228,6 +356,112 @@ const AdminLogs: React.FC = () => {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="glass rounded-[32px] border border-white/20 shadow-sm p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-black text-text-primary">
+            Employee Present/Absent Log
+          </h3>
+          <div className="flex items-center gap-4 text-xs font-semibold uppercase tracking-widest text-text-muted">
+            <span>
+              Present:{" "}
+              {presenceLogs.filter((row) => row.status === "present").length}
+            </span>
+            <span>
+              Late:{" "}
+              {
+                presenceLogs.filter((row) => row.status === "late_checkin")
+                  .length
+              }
+            </span>
+            <span>
+              Absent:{" "}
+              {presenceLogs.filter((row) => row.status === "absent").length}
+            </span>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-white/20 text-[10px] font-black text-text-muted uppercase tracking-[0.2em]">
+                <th className="px-4 py-3">Employee</th>
+                <th className="px-4 py-3">Role</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Check-in</th>
+                <th className="px-4 py-3">Check-out</th>
+                <th className="px-4 py-3 text-right">Worked</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isPresenceLoading ? (
+                [1, 2, 3].map((i) => (
+                  <tr
+                    key={i}
+                    className="border-b border-white/10 animate-pulse"
+                  >
+                    <td colSpan={6} className="px-4 py-4">
+                      <div className="h-4 bg-gray-200 dark:bg-white/10 rounded w-full" />
+                    </td>
+                  </tr>
+                ))
+              ) : presenceLogs.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-4 py-8 text-center text-text-muted font-medium italic"
+                  >
+                    No employee records found.
+                  </td>
+                </tr>
+              ) : (
+                presenceLogs.map((row) => (
+                  <tr
+                    key={row.user_id}
+                    className="border-b border-white/10 hover:bg-white/60 dark:hover:bg-white/5 transition-all"
+                  >
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={row.user_name} size="xs" />
+                        <span className="text-sm font-bold text-text-primary">
+                          {row.user_name}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 text-xs font-semibold capitalize text-text-muted">
+                      {row.role}
+                    </td>
+                    <td className="px-4 py-4">
+                      <span
+                        className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${
+                          row.status === "present"
+                            ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                            : row.status === "late_checkin"
+                              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                              : "bg-red-500/10 text-red-600 dark:text-red-400"
+                        }`}
+                      >
+                        {row.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-sm font-semibold text-text-secondary">
+                      {row.check_in ? format(row.check_in, "h:mm a") : "--"}
+                    </td>
+                    <td className="px-4 py-4 text-sm font-semibold text-text-secondary">
+                      {row.check_out ? format(row.check_out, "h:mm a") : "--"}
+                    </td>
+                    <td className="px-4 py-4 text-right text-sm font-bold text-text-primary">
+                      {row.duration_minutes
+                        ? `${(row.duration_minutes / 60).toFixed(1)}h`
+                        : "0.0h"}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 glass p-4 rounded-2xl border-none shadow-sm">
@@ -263,8 +497,32 @@ const AdminLogs: React.FC = () => {
               <option value="checkin" className="dark:bg-slate-800">
                 Check-in
               </option>
+              <option value="late_checkin" className="dark:bg-slate-800">
+                Late Check-in
+              </option>
               <option value="checkout" className="dark:bg-slate-800">
                 Check-out
+              </option>
+              <option value="auto_absent" className="dark:bg-slate-800">
+                Auto Absent
+              </option>
+              <option
+                value="late_checkin_request"
+                className="dark:bg-slate-800"
+              >
+                Late Request
+              </option>
+              <option
+                value="late_checkin_approved"
+                className="dark:bg-slate-800"
+              >
+                Late Approved
+              </option>
+              <option
+                value="late_checkin_rejected"
+                className="dark:bg-slate-800"
+              >
+                Late Rejected
               </option>
               <option value="pause" className="dark:bg-slate-800">
                 Break Start
@@ -381,7 +639,8 @@ const AdminLogs: React.FC = () => {
                   <td className="px-8 py-6 text-right">
                     {log.shift_minutes ? (
                       <span className="text-xs font-bold text-text-secondary bg-white/60 dark:bg-white/5 px-3 py-1 rounded-full whitespace-nowrap">
-                        {Math.floor(log.shift_minutes / 60)}h {log.shift_minutes % 60}m
+                        {Math.floor(log.shift_minutes / 60)}h{" "}
+                        {log.shift_minutes % 60}m
                       </span>
                     ) : (
                       "--"
@@ -390,7 +649,8 @@ const AdminLogs: React.FC = () => {
                   <td className="px-8 py-6 text-right">
                     {log.overtime_minutes ? (
                       <span className="text-xs font-black text-indigo-500 bg-indigo-500/10 px-3 py-1 rounded-full whitespace-nowrap">
-                        {Math.floor(log.overtime_minutes / 60)}h {log.overtime_minutes % 60}m
+                        {Math.floor(log.overtime_minutes / 60)}h{" "}
+                        {log.overtime_minutes % 60}m
                       </span>
                     ) : (
                       "--"

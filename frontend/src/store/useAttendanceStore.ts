@@ -1,10 +1,16 @@
 import { create } from 'zustand';
-import { db } from '../firebase.ts';
-import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
+import { getDocs, collection, query, where, limit } from 'firebase/firestore';
+import { db } from '../firebase';
+import { todayAttendanceQuery } from '../lib/firestoreQueries';
+import { formatDayKey, parseFirestoreDate } from '../lib/firestoreDates';
+import { format } from 'date-fns';
 
 export interface AttendanceRecord {
   id: string;
   check_in: string | null;
+  work_started_at?: string | null;
+  scrum_submitted_at?: string | null;
+
   check_out: string | null;
   scheduled_checkout: string | null;
   status: string;
@@ -23,66 +29,103 @@ interface AttendanceStore {
   attendance: AttendanceRecord | null;
   isBlocked: boolean;
   isLoading: boolean;
+  lateRequestStatus: "pending" | "approved" | "rejected" | null;
   setAttendance: (attendance: AttendanceRecord | null) => void;
   setIsBlocked: (isBlocked: boolean) => void;
   fetchTodayAttendance: (userId: string) => Promise<void>;
 }
 
+let activeFetch: Promise<void> | null = null;
+let lastFetchKey: string | null = null;
+let lastFetchResolved = false;
+
+const fetchLateRequestStatus = async (userId: string) => {
+  if (!userId) {
+    return null;
+  }
+
+  const today = format(new Date(), "yyyy-MM-dd");
+  const snap = await getDocs(
+    query(
+      collection(db, "late_checkin_requests"),
+      where("user_id", "==", userId),
+      where("request_date", "==", today),
+      limit(10),
+    ),
+  );
+
+  if (snap.empty) {
+    return null;
+  }
+
+  const latestRequest = snap.docs
+    .map((doc) => doc.data() as any)
+    .sort((a, b) => {
+      const aDate = parseFirestoreDate(a.created_at)?.getTime() || 0;
+      const bDate = parseFirestoreDate(b.created_at)?.getTime() || 0;
+      return bDate - aDate;
+    })[0];
+
+  return latestRequest?.status || null;
+};
+
 export const useAttendanceStore = create<AttendanceStore>((set) => ({
   attendance: null,
   isBlocked: false,
   isLoading: true,
+  lateRequestStatus: null,
   setAttendance: (attendance) => set({ attendance }),
   setIsBlocked: (isBlocked) => set({ isBlocked }),
   fetchTodayAttendance: async (userId: string) => {
     if (!userId) {
+      set({ lateRequestStatus: null, isLoading: false });
+      return;
+    }
+
+    try {
+      const lateRequestStatus = await fetchLateRequestStatus(userId);
+      set({ lateRequestStatus });
+    } catch (err) {
+      console.error("Failed to fetch today's late request status", err);
+      set({ lateRequestStatus: null });
+    }
+
+    const fetchKey = `${userId}_${formatDayKey()}`;
+    if (activeFetch && lastFetchKey === fetchKey) {
+      return activeFetch;
+    }
+    const current = useAttendanceStore.getState().attendance as any;
+    const currentCreatedAt = parseFirestoreDate(current?.created_at);
+    if (
+      lastFetchKey === fetchKey &&
+      (lastFetchResolved ||
+        (current?.user_id === userId &&
+          currentCreatedAt &&
+          formatDayKey(currentCreatedAt) === formatDayKey()))
+    ) {
       set({ isLoading: false });
       return;
     }
+
+    lastFetchKey = fetchKey;
+    activeFetch = (async () => {
     try {
-      const now = new Date();
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-
-      // Fetch all records for this user and sort client-side to avoid complex index requirements
-      const q = query(
-        collection(db, 'attendance'),
-        where('user_id', '==', userId)
-      );
-
-      const snap = await getDocs(q);
+      const snap = await getDocs(todayAttendanceQuery(userId));
       
       if (!snap.empty) {
-        // Find if any record was created today
         const records = snap.docs.map(d => {
           const data = d.data();
           return {
             id: d.id,
             ...data,
-            created_at: data.created_at?.toDate ? data.created_at.toDate() : new Date(data.created_at)
+            created_at: parseFirestoreDate(data.created_at)
           } as any as AttendanceRecord;
-        }).sort((a: any, b: any) => b.created_at.getTime() - a.created_at.getTime());
-        
-        // Priority 1: Today's record (even if completed)
-        const todayRecord = records.find(r => {
-          const createdAt = (r as any).created_at;
-          return createdAt.getTime() >= startOfToday;
         });
 
-        if (todayRecord) {
+        if (records[0]) {
           set({ 
-            attendance: todayRecord, 
-            isBlocked: todayRecord.early_exit || false,
-            isLoading: false 
-          });
-          return;
-        }
-
-        // Priority 2: An open session from TODAY (handle it as active)
-        const openRecord = records.find(r => !r.check_out && (r as any).created_at.getTime() >= startOfToday);
-        if (openRecord) {
-          set({ 
-            attendance: openRecord, 
-            isBlocked: openRecord.early_exit || false,
+            attendance: records[0], 
+            isBlocked: records[0].early_exit || false,
             isLoading: false 
           });
           return;
@@ -91,9 +134,15 @@ export const useAttendanceStore = create<AttendanceStore>((set) => ({
 
       // If no records found or none from today/open
       set({ attendance: null, isBlocked: false, isLoading: false });
+      lastFetchResolved = true;
     } catch (err) {
       console.error('Failed to fetch attendance', err);
       set({ isLoading: false });
+    } finally {
+      lastFetchResolved = true;
+      activeFetch = null;
     }
+    })();
+    return activeFetch;
   },
 }));

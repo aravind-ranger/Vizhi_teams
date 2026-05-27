@@ -22,6 +22,7 @@ import { useTitle } from "../hooks/useTitle";
 import { db } from "../firebase";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { useAuthStore } from "../store/useAuthStore";
+import { attendanceRangeQuery } from "../lib/firestoreQueries";
 import ProgressBar from "../components/ProgressBar";
 
 const Attendance: React.FC = () => {
@@ -54,11 +55,8 @@ const Attendance: React.FC = () => {
       const monthStart = startOfMonth(selectedDate);
       const monthEnd = endOfMonth(selectedDate);
 
-      // Fetch Attendance - Simple query to avoid index errors
-      const qAtt = query(
-        collection(db, "attendance"),
-        where("user_id", "==", user.id),
-      );
+      // Fetch Attendance - Use bounded query to prevent unbounded scaling
+      const qAtt = attendanceRangeQuery(monthStart, monthEnd, user.id, 100);
       const attSnap = await getDocs(qAtt);
 
       interface AttendanceRecord {
@@ -81,29 +79,27 @@ const Attendance: React.FC = () => {
         } as any as AttendanceRecord;
       });
 
-      // Filter by current month in JS
+      // Filter and sort the fetched data (though it's mostly handled by query now)
       const attData = allAttData
-        .filter((item) => {
-          const d = new Date(item.date);
-          return d >= monthStart && d <= monthEnd;
-        })
         .sort(
           (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
         );
 
       setHistory(attData);
 
-      // Fetch Leaves
+      // Fetch Leaves (optimized to only get leaves for the viewed month onwards)
+      const startStr = format(monthStart, "yyyy-MM-dd");
       const qLeaves = query(
         collection(db, "leaves"),
-        where("user_id", "==", user.id),
-        where("status", "==", "approved"),
+        where("to_date", ">=", startStr),
       );
       const leavesSnap = await getDocs(qLeaves);
-      const leavesData = leavesSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
+      const leavesData = leavesSnap.docs
+        .map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }))
+        .filter((l: any) => l.user_id === user.id && l.status === "approved");
       setLeaves(leavesData);
 
       // Calculate Stats - Count unique dates only
@@ -227,6 +223,23 @@ const Attendance: React.FC = () => {
                 <div className="text-center py-10">
                   <CheckCircle2 className="w-16 h-16 text-white mx-auto mb-6" />
                   <h4 className="text-2xl font-black">Shift Completed</h4>
+                </div>
+              ) : !attendance.work_started_at ? (
+                <div className="space-y-10 text-center">
+                  <div>
+                    <p className="text-[10px] text-white/50 uppercase font-black tracking-widest mb-2">
+                      Check-in complete
+                    </p>
+                    <p className="text-4xl font-black">
+                      {format(new Date(attendance.check_in), "HH:mm a")}
+                    </p>
+                  </div>
+
+                  <div className="w-full h-px bg-white/10" />
+
+                  <p className="text-sm font-bold text-white/60 uppercase tracking-[0.2em] animate-pulse">
+                    Submit Daily Scrum to start your work timer
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-10 text-center">

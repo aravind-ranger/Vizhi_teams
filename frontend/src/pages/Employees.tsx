@@ -28,7 +28,7 @@ import {
   setDoc,
   serverTimestamp,
   deleteDoc,
-  where,
+  limit,
 } from "firebase/firestore";
 import { initializeApp } from "firebase/app";
 import {
@@ -75,35 +75,19 @@ const Employees: React.FC = () => {
   });
   useTitle("Team Members");
 
-  const [attendanceMap, setAttendanceMap] = useState<Record<string, boolean>>(
-    {},
-  );
-
   useEffect(() => {
     fetchEmployees();
   }, []);
 
   const fetchEmployees = async () => {
     try {
-      const q = query(collection(db, "users"), orderBy("name", "asc"));
+      const q = query(collection(db, "users"), orderBy("name", "asc"), limit(100));
       const snap = await getDocs(q);
       const employeeData = snap.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Employee[];
       setEmployees(employeeData);
-
-      // Fetch today's attendance to show presence dots
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const attRef = collection(db, "attendance");
-      const qAtt = query(attRef, where("created_at", ">=", todayStart));
-      const attSnap = await getDocs(qAtt);
-      const attMap: Record<string, boolean> = {};
-      attSnap.docs.forEach((d) => {
-        attMap[d.data().user_id] = true;
-      });
-      setAttendanceMap(attMap);
     } catch (err) {
       console.error(err);
       toast.error("Failed to load team members");
@@ -290,10 +274,6 @@ const Employees: React.FC = () => {
                     <h3 className="text-xl font-black text-text-primary group-hover:text-primary transition-colors">
                       {employee.name}
                     </h3>
-                    <div
-                      className={`w-2 h-2 rounded-full ${attendanceMap[employee.id] ? "bg-success" : "bg-danger"}`}
-                      title={attendanceMap[employee.id] ? "Present" : "Absent"}
-                    />
                     {employee.role === "admin" && (
                       <ShieldCheck className="w-4 h-4 text-primary" />
                     )}

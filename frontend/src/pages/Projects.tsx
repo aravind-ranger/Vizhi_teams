@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Plus, Search, Filter, MoreVertical,
-  Calendar, Users, CheckCircle2, Clock, Briefcase, Lock, Check, List, Layout
+  Plus, Search, MoreVertical,
+  Calendar, Briefcase, Lock, Check, List, Layout
 } from 'lucide-react';
 import { db } from '../firebase.ts';
-import { collection, query, getDocs, orderBy, where, addDoc, serverTimestamp, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, updateDoc, deleteDoc, doc, getDocs } from 'firebase/firestore';
 import ProgressBar from '../components/ProgressBar';
 import { useTitle } from '../hooks/useTitle';
 import Avatar from '../components/Avatar';
 import { useAuthStore } from '../store/useAuthStore';
 import { toast } from 'react-hot-toast';
+import { getProjectsCached, getUsersCached } from '../lib/firestoreCache';
 
 interface Project {
   id: string;
@@ -60,35 +61,35 @@ const Projects: React.FC = () => {
   }, [user]);
 
   const fetchEmployees = async () => {
-    const snap = await getDocs(collection(db, 'users'));
-    setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+    const cachedUsers = await getUsersCached();
+    setEmployees(cachedUsers);
   };
 
   const fetchProjects = async () => {
     setIsLoading(true);
     try {
-      let q = query(collection(db, 'projects'));
+      let projectsData: Project[] = [];
 
-      const querySnapshot = await getDocs(q);
-      let projectsData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        status: doc.data().status || 'active',
-        total_tasks: doc.data().total_tasks || 0,
-        completed_tasks: doc.data().completed_tasks || 0,
-        members: doc.data().members || [],
-      })) as Project[];
+      if (user?.role === 'admin') {
+        const snap = await getDocs(collection(db, 'projects'));
+        projectsData = snap.docs
+          .map((d) => ({ id: d.id, ...(d.data() as any) }))
+          .sort((a: any, b: any) => {
+            const aTime = a.created_at?.toDate
+              ? a.created_at.toDate().getTime()
+              : new Date(a.created_at || 0).getTime();
+            const bTime = b.created_at?.toDate
+              ? b.created_at.toDate().getTime()
+              : new Date(b.created_at || 0).getTime();
+            return bTime - aTime;
+          });
+      } else {
+        projectsData = await getProjectsCached();
 
-      // Sort by created_at desc in memory
-      projectsData.sort((a, b) => {
-        const dateA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || 0);
-        const dateB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at || 0);
-        return dateB.getTime() - dateA.getTime();
-      });
-
-      // In-memory filter for non-admins to ensure visibility without complex index requirements
-      if (user?.role !== 'admin' && user?.id) {
-        projectsData = projectsData.filter(p => p.members?.includes(user.id));
+        // In-memory filter for non-admins to ensure visibility without complex index requirements
+        if (user?.id) {
+          projectsData = projectsData.filter((p: Project) => p.members?.includes(user.id));
+        }
       }
 
       setProjects(projectsData);
@@ -143,10 +144,11 @@ const Projects: React.FC = () => {
 
           // Also notify all admins
           try {
-            const adminsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
-            for (const adminDoc of adminsSnap.docs) {
+            const cachedUsers = await getUsersCached();
+            const admins = cachedUsers.filter((u: any) => u.role === 'admin');
+            for (const admin of admins) {
               await addDoc(collection(db, 'notifications'), {
-                user_id: adminDoc.id,
+                user_id: admin.id,
                 title: `Project deadline: ${newProject.name}`,
                 message: notificationMsg,
                 type: 'warning',
@@ -211,10 +213,11 @@ const Projects: React.FC = () => {
 
           // Notify admins
           try {
-            const adminsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
-            for (const adminDoc of adminsSnap.docs) {
+            const cachedUsers = await getUsersCached();
+            const admins = cachedUsers.filter((u: any) => u.role === 'admin');
+            for (const admin of admins) {
               await addDoc(collection(db, 'notifications'), {
-                user_id: adminDoc.id,
+                user_id: admin.id,
                 title: `Project deadline updated: ${selectedProject.name}`,
                 message: notificationMsg,
                 type: 'warning',

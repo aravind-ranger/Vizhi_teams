@@ -22,7 +22,8 @@ import {
   doc,
   onSnapshot,
   query,
-  orderBy,
+  where,
+  limit,
   serverTimestamp,
 } from "firebase/firestore";
 import ProgressBar from "../components/ProgressBar";
@@ -125,14 +126,42 @@ const Leaves: React.FC = () => {
   };
 
   useEffect(() => {
-    const q = query(collection(db, "leaves"), orderBy("created_at", "desc"));
+    if (!user?.id) return;
+    const q =
+      activeTab === "all" && (user.role === "admin" || user.role === "manager")
+        ? query(
+            collection(db, "leaves"),
+            where("status", "==", "pending"),
+            limit(100),
+          )
+        : query(
+            collection(db, "leaves"),
+            where("user_id", "==", user.id),
+            limit(50),
+          );
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const leavesData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as LeaveRequest[];
+        const leavesData = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter((leave: any) => {
+            if (activeTab === "all" && (user.role === "admin" || user.role === "manager")) {
+              return leave.status === "pending";
+            }
+            return leave.user_id === user.id;
+          })
+          .sort((a: any, b: any) => {
+            const aTime = a.created_at?.toDate
+              ? a.created_at.toDate().getTime()
+              : new Date(a.created_at || 0).getTime();
+            const bTime = b.created_at?.toDate
+              ? b.created_at.toDate().getTime()
+              : new Date(b.created_at || 0).getTime();
+            return bTime - aTime;
+          }) as LeaveRequest[];
         setLeaves(leavesData);
         setIsLoading(false);
       },
@@ -144,7 +173,7 @@ const Leaves: React.FC = () => {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [activeTab, user?.id, user?.role]);
 
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();

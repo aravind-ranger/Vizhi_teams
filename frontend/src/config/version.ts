@@ -1,7 +1,33 @@
 // Application versioning and release notes
-export const APP_VERSION = "1.1.0";
+export const APP_VERSION = "1.2.0";
 
 export const RELEASE_NOTES = [
+  {
+    version: "1.2.0",
+    date: "May 26, 2026",
+    title: "Attendance Workflow & Admin Review",
+    changes: [
+      "Added automatic absence marking after the morning cutoff for employees who have not checked in",
+      "Created a dedicated Late Check-In request page so employees can submit a reason and details instead of forcing a normal check-in",
+      "Added admin approve/reject actions for late check-in requests with notification and audit log updates",
+      "Preserved late_checkin as its own attendance status so approved requests do not appear as normal present entries",
+      "Updated the admin attendance summary to show present, late check-in, and absent counts separately",
+      "Expanded admin request tables so late check-in details remain fully readable during review",
+      "Blocked direct check-in from the attendance hook when an auto-absent record already exists",
+      "Added a dedicated admin-only Late Check-In Requests tab in the sidebar for centralized approval workflow",
+      "Implemented real-time late check-in status tracking so approval/rejection updates are reflected immediately in employee flows",
+      "Added requester notifications when admins approve or reject late check-in requests",
+      "Blocked Daily Scrum submission when late check-in is pending or rejected until admin approval",
+      "Timers now require Daily Scrum submission to start; employees must submit a Daily Scrum to start their timer",
+      "Blocked task creation and task start actions when late check-in is pending or rejected until admin approval",
+      "Enforced check-in prerequisite before Daily Scrum submission with a locked-state screen for non-checked-in users",
+      "Enforced check-in prerequisite before task create/start actions for non-admin users",
+      "Removed the admin My Report toggle so admins stay focused on the Admin Dashboard report view",
+      "Fixed the admin Dashboard Present Today count to include checked-out employees and users without an explicit inactive flag",
+      "Refined Dashboard visibility to focus on users checked in today by removing absent-user display widgets",
+      "Removed select advanced features from the employee interface while retaining full admin privileges to streamline employee workflows and reduce complexity",
+    ],
+  },
   {
     version: "1.1.0",
     date: "May 18, 2026",

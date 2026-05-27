@@ -25,7 +25,6 @@ import {
   collection,
   query,
   where,
-  orderBy,
   onSnapshot,
   writeBatch,
   doc,
@@ -36,6 +35,9 @@ import {
   limit,
 } from "firebase/firestore";
 import Avatar from "./Avatar";
+import { getDayBounds } from "../lib/firestoreDates";
+import { recentNotificationsQuery } from "../lib/firestoreQueries";
+import { useTodayLateRequestStatus } from "../hooks/useTodayLateRequestStatus";
 
 interface TopBarProps {
   onFocusMode: () => void;
@@ -66,8 +68,36 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
   const [hasNotifiedShiftEnd, setHasNotifiedShiftEnd] = useState(false);
   const [hasNotifiedScrum, setHasNotifiedScrum] = useState(false);
   const [showAllNotifs, setShowAllNotifs] = useState(false);
+  const { status: todayLateRequestStatus } = useTodayLateRequestStatus();
   const notifRef = React.useRef<HTMLDivElement>(null);
   const userMenuRef = React.useRef<HTMLDivElement>(null);
+  const isAfterLateCutoff = time.getHours() >= 11;
+  const lateRequestStatusMeta = todayLateRequestStatus
+    ? {
+        pending: {
+          label: "Request Pending",
+          className: "text-amber-700 bg-amber-500/10",
+        },
+        approved: {
+          label: "Approved",
+          className: "text-green-700 bg-green-500/10",
+        },
+        rejected: {
+          label: "Rejected",
+          className: "text-red-700 bg-red-500/10",
+        },
+      }[todayLateRequestStatus]
+    : null;
+  const workStartTime = attendance?.work_started_at
+    ? new Date(attendance.work_started_at)
+    : null;
+  const hasStartedWork = Boolean(workStartTime && !attendance?.check_out);
+  const needsScrum = Boolean(
+    attendance?.check_in &&
+    !attendance?.work_started_at &&
+    !attendance?.check_out &&
+    !attendance?.is_overtime,
+  );
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -94,12 +124,8 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
       setTime(now);
 
       // Shift end notification (8 hours)
-      if (
-        attendance?.check_in &&
-        !attendance.check_out &&
-        !hasNotifiedShiftEnd
-      ) {
-        const checkInTime = new Date(attendance.check_in);
+      if (workStartTime && !attendance.check_out && !hasNotifiedShiftEnd) {
+        const checkInTime = workStartTime;
         const breakSeconds = (attendance.total_break_ms || 0) / 1000;
         const diffHours =
           (now.getTime() - checkInTime.getTime() - breakSeconds * 1000) /
@@ -121,36 +147,21 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
       }
     }, 1000);
     return () => clearInterval(timer);
-  }, [attendance, hasNotifiedShiftEnd, user, hasNotifiedScrum]);
+  }, [attendance, hasNotifiedShiftEnd, user, hasNotifiedScrum, workStartTime]);
 
   const checkScrum = async () => {
     if (!user) return;
     try {
-      const today = format(new Date(), "yyyy-MM-dd");
+      const { start, end } = getDayBounds();
       const q = query(
         collection(db, "scrums"),
-        where("user_id", "==", user.id),
+        where("created_at", ">=", start),
+        where("created_at", "<", end),
       );
       const snap = await getDocs(q);
-      let alreadySubmitted = false;
-      if (!snap.empty) {
-        const latestScrum = snap.docs
-          .map((scrumDoc) => scrumDoc.data())
-          .sort((a, b) => {
-            const aTime = a.created_at?.toDate
-              ? a.created_at.toDate().getTime()
-              : new Date(a.created_at || 0).getTime();
-            const bTime = b.created_at?.toDate
-              ? b.created_at.toDate().getTime()
-              : new Date(b.created_at || 0).getTime();
-            return bTime - aTime;
-          })[0];
-        const lastScrumDate = format(
-          latestScrum.created_at.toDate(),
-          "yyyy-MM-dd",
-        );
-        alreadySubmitted = lastScrumDate === today;
-      }
+      const alreadySubmitted = snap.docs.some(
+        (doc) => doc.data()?.user_id === user.id,
+      );
 
       if (!alreadySubmitted) {
         toast("Don't forget to submit your Daily Scrum!", {
@@ -167,18 +178,10 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
   useEffect(() => {
     if (!user?.id) return;
 
-    const qPersonal = query(
-      collection(db, "notifications"),
-      where("user_id", "==", user.id),
-    );
+    const qNotifications = recentNotificationsQuery();
 
-    const qBroadcast = query(
-      collection(db, "notifications"),
-      where("user_id", "==", "all"),
-    );
-
-    const unsubPersonal = onSnapshot(qPersonal, (snapshot) => {
-      const personalNotifs = snapshot.docs.map((doc) => {
+    const unsubNotifications = onSnapshot(qNotifications, (snapshot) => {
+      const allNotifs = snapshot.docs.map((doc) => {
         const data = doc.data();
         let dateStr = new Date().toISOString();
         if (data.created_at?.toDate) {
@@ -192,48 +195,55 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
           created_at: dateStr,
         };
       });
-      setNotifications((prev) => {
-        const other = prev.filter((n) => n.user_id !== user.id);
-        return [...other, ...personalNotifs].sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        );
-      });
-    });
-
-    const unsubBroadcast = onSnapshot(qBroadcast, (snapshot) => {
-      const broadcastNotifs = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        let dateStr = new Date().toISOString();
-        if (data.created_at?.toDate) {
-          dateStr = data.created_at.toDate().toISOString();
-        } else if (data.created_at) {
-          dateStr = new Date(data.created_at).toISOString();
-        }
-        return {
-          id: doc.id,
-          ...data,
-          created_at: dateStr,
-        };
-      });
-      setNotifications((prev) => {
-        const other = prev.filter((n) => n.user_id !== "all");
-        return [...other, ...broadcastNotifs].sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        );
-      });
+      setNotifications(allNotifs);
     });
 
     return () => {
-      unsubPersonal();
-      unsubBroadcast();
+      unsubNotifications();
     };
   }, [user?.id]);
 
+  const isAdminView = user?.role === "admin" || user?.role === "manager";
+  const todayKey = format(new Date(), "yyyy-MM-dd");
+
+  const isRelevantEmployeeNotification = (notification: any) => {
+    if (!user?.id) return false;
+    if (notification.user_id === user.id) return true;
+    return false;
+  };
+
+  const isRelevantAdminNotification = (notification: any) => {
+    if (!user?.id) return false;
+    return (
+      notification.user_id === user.id ||
+      notification.user_id === "admin" ||
+      notification.user_id === "all"
+    );
+  };
+
+  const visibleNotifications = notifications.filter((notification) => {
+    const createdAtKey = format(
+      new Date(notification.created_at),
+      "yyyy-MM-dd",
+    );
+    if (isAdminView) {
+      return (
+        createdAtKey === todayKey && isRelevantAdminNotification(notification)
+      );
+    }
+
+    return (
+      createdAtKey === todayKey && isRelevantEmployeeNotification(notification)
+    );
+  });
+
+  const modalNotifications = isAdminView
+    ? notifications.filter(isRelevantAdminNotification)
+    : notifications.filter(isRelevantEmployeeNotification);
+
   const markAllRead = async () => {
     try {
-      const unreadNotifs = notifications.filter((n) => !n.is_read);
+      const unreadNotifs = visibleNotifications.filter((n) => !n.is_read);
       if (unreadNotifs.length === 0) return;
 
       const batch = writeBatch(db);
@@ -272,6 +282,65 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
               <div className="flex items-center px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest animate-pulse">
                 Syncing...
               </div>
+            ) : (attendance?.status === "late_checkin" ||
+                todayLateRequestStatus === "approved") &&
+              !attendance?.check_in ? (
+              <div className="flex items-center gap-2">
+                {lateRequestStatusMeta && (
+                  <div
+                    className={`px-3 py-2 text-[11px] font-bold uppercase tracking-wider rounded-lg ${lateRequestStatusMeta.className}`}
+                    aria-label={`Late check-in request ${lateRequestStatusMeta.label}`}
+                  >
+                    {lateRequestStatusMeta.label}
+                  </div>
+                )}
+                <button
+                  onClick={() => setShowCheckInModal(true)}
+                  className="flex items-center px-4 py-2 bg-amber-500 text-white text-xs font-bold rounded-lg shadow-sm hover:scale-105 active:scale-95 transition-all"
+                >
+                  <Power className="w-3 h-3 mr-2" />
+                  Check In
+                </button>
+              </div>
+            ) : attendance?.status === "absent" && !attendance?.check_in ? (
+              <div className="flex items-center gap-2">
+                <div className="px-3 py-2 text-[10px] font-bold text-danger uppercase tracking-wider bg-danger/10 rounded-lg">
+                  Marked Absent
+                </div>
+                {lateRequestStatusMeta ? (
+                  <div
+                    className={`px-3 py-2 text-[11px] font-bold uppercase tracking-wider rounded-lg ${lateRequestStatusMeta.className}`}
+                    aria-label={`Late check-in request ${lateRequestStatusMeta.label}`}
+                  >
+                    {lateRequestStatusMeta.label}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => navigate("/late-checkin")}
+                    className="flex items-center px-3 py-2 bg-amber-500 text-white text-[11px] font-bold rounded-lg shadow-sm hover:scale-105 active:scale-95 transition-all"
+                  >
+                    <ClockIcon className="w-3 h-3 mr-1.5" />
+                    Late Check-In
+                  </button>
+                )}
+              </div>
+            ) : !attendance?.check_in && isAfterLateCutoff ? (
+              lateRequestStatusMeta ? (
+                <div
+                  className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg ${lateRequestStatusMeta.className}`}
+                  aria-label={`Late check-in request ${lateRequestStatusMeta.label}`}
+                >
+                  {lateRequestStatusMeta.label}
+                </div>
+              ) : (
+                <button
+                  onClick={() => navigate("/late-checkin")}
+                  className="flex items-center px-4 py-2 bg-amber-500 text-white text-xs font-bold rounded-lg shadow-sm hover:scale-105 active:scale-95 transition-all"
+                >
+                  <ClockIcon className="w-3 h-3 mr-2" />
+                  Late Check-In
+                </button>
+              )
             ) : !attendance?.check_in ? (
               <button
                 onClick={() => setShowCheckInModal(true)}
@@ -279,6 +348,14 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
               >
                 <Power className="w-3 h-3 mr-2" />
                 Check In
+              </button>
+            ) : needsScrum ? (
+              <button
+                onClick={() => navigate("/daily-scrum")}
+                className="flex items-center px-4 py-2 bg-amber-500 text-white text-xs font-bold rounded-lg shadow-sm hover:scale-105 active:scale-95 transition-all"
+              >
+                <ClockIcon className="w-3 h-3 mr-2" />
+                Complete Scrum
               </button>
             ) : !attendance?.check_out ? (
               <button
@@ -302,10 +379,10 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
             )}
 
             {/* Overtime Button - Enabled after 8 hours */}
-            {attendance?.check_in &&
+            {hasStartedWork &&
               !attendance.is_overtime &&
               (() => {
-                const checkInTime = new Date(attendance.check_in);
+                const checkInTime = workStartTime!;
                 const endTime = attendance.check_out
                   ? new Date(attendance.check_out)
                   : new Date();
@@ -344,7 +421,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
             )}
 
             {/* Pause/Resume Actions */}
-            {attendance?.check_in && !attendance?.check_out && (
+            {hasStartedWork && !attendance?.check_out && (
               <div className="flex items-center space-x-1 border-l border-gray-200 ml-2 pl-2">
                 {attendance.is_paused ? (
                   <button
@@ -379,7 +456,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
               className="p-2 text-text-secondary hover:bg-gray-100 dark:hover:bg-white/10 rounded-full relative"
             >
               <Bell className="w-5 h-5" />
-              {notifications.some((n) => !n.is_read) && (
+              {visibleNotifications.some((n) => !n.is_read) && (
                 <span className="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full border-2 border-white dark:border-[#0B1120]"></span>
               )}
             </button>
@@ -399,11 +476,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
                 </div>
                 <div className="max-h-96 overflow-y-auto">
                   {(() => {
-                    const today = format(new Date(), "yyyy-MM-dd");
-                    const todayNotifs = notifications.filter(
-                      (n) =>
-                        format(new Date(n.created_at), "yyyy-MM-dd") === today,
-                    );
+                    const todayNotifs = visibleNotifications;
 
                     if (todayNotifs.length === 0) {
                       return (
@@ -673,8 +746,11 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
                 <button
                   key={loc.id}
                   onClick={async () => {
-                    await checkIn(loc.id);
-                    setShowCheckInModal(false);
+                    const success = await checkIn(loc.id);
+                    if (success) {
+                      setShowCheckInModal(false);
+                      navigate("/daily-scrum", { replace: true });
+                    }
                   }}
                   className="flex items-center space-x-6 p-6 rounded-3xl border-2 border-transparent hover:border-primary/20 hover:bg-gray-50 dark:hover:bg-white/10 transition-all group"
                 >
@@ -758,10 +834,12 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
             <div className="p-8 border-b border-border dark:border-white/5 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
               <div>
                 <h3 className="text-2xl font-black text-text-primary tracking-tighter">
-                  All Notifications
+                  {isAdminView ? "Today's Notifications" : "All Notifications"}
                 </h3>
                 <p className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] mt-1">
-                  Full activity history
+                  {isAdminView
+                    ? "Admin activity feed for today"
+                    : "Full activity history"}
                 </p>
               </div>
               <button
@@ -775,7 +853,7 @@ const TopBar: React.FC<TopBarProps> = ({ onFocusMode }) => {
             <div className="flex-1 overflow-y-auto p-8 space-y-8">
               {(() => {
                 const grouped: { [key: string]: any[] } = {};
-                notifications.forEach((n) => {
+                modalNotifications.forEach((n) => {
                   const date = format(new Date(n.created_at), "yyyy-MM-dd");
                   if (!grouped[date]) grouped[date] = [];
                   grouped[date].push(n);

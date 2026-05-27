@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { db } from '../firebase.ts';
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { useAttendanceStore } from '../store/useAttendanceStore';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -17,7 +17,7 @@ export const useAttendance = () => {
   }, [fetchTodayAttendance, user?.id]);
 
   const checkIn = async (workLocation?: string) => {
-    if (!user?.id) return;
+    if (!user?.id) return false;
     try {
       const now = new Date();
       // Scheduled checkout is 8 hours from now
@@ -26,6 +26,8 @@ export const useAttendance = () => {
       const newAttendance = {
         user_id: user.id,
         check_in: now.toISOString(),
+        work_started_at: null,
+        scrum_submitted_at: null,
         check_out: null,
         scheduled_checkout: scheduledCheckout.toISOString(),
         status: 'present',
@@ -60,9 +62,11 @@ export const useAttendance = () => {
       });
 
       toast.success(`Checked in at ${now.toLocaleTimeString()}. Checkout at ${scheduledCheckout.toLocaleTimeString()} 🕐`);
+      return true;
     } catch (err: any) {
       console.error(err);
       toast.error('Check-in failed');
+      return false;
     }
   };
 
@@ -77,12 +81,14 @@ export const useAttendance = () => {
       const qTasks = query(tasksRef, where('active_session_id', '==', 'active'), where('assigned_to', '==', user.id));
       const activeTasks = await getDocs(qTasks);
       
+      const batch = writeBatch(db);
       for (const taskDoc of activeTasks.docs) {
         const taskData = taskDoc.data();
         const startTime = new Date(taskData.active_session_start.toDate ? taskData.active_session_start.toDate() : taskData.active_session_start).getTime();
         const durationMinutes = Math.floor((now.getTime() - startTime) / 60000);
 
-        await addDoc(collection(db, 'task_sessions'), {
+        const sessionRef = doc(collection(db, 'task_sessions'));
+        batch.set(sessionRef, {
           task_id: taskDoc.id,
           user_id: user.id,
           start_time: taskData.active_session_start,
@@ -91,13 +97,14 @@ export const useAttendance = () => {
           type: 'checkout_auto_pause'
         });
 
-        await updateDoc(doc(db, 'tasks', taskDoc.id), {
+        batch.update(doc(db, 'tasks', taskDoc.id), {
           active_session_id: null,
           active_session_start: null,
           is_paused_by_checkout: true, // Specific flag for checkout
           total_minutes_logged: (taskData.total_minutes_logged || 0) + durationMinutes
         });
       }
+      await batch.commit();
 
       // Calculate active duration (Total time - Break time)
       const totalDurationMs = now.getTime() - checkInTime.getTime();
@@ -172,12 +179,14 @@ export const useAttendance = () => {
       const q = query(tasksRef, where('active_session_id', '==', 'active'), where('assigned_to', '==', user.id));
       const activeTasks = await getDocs(q);
       
+      const batch = writeBatch(db);
       for (const taskDoc of activeTasks.docs) {
         const taskData = taskDoc.data();
         const startTime = taskData.active_session_start.toDate();
         const durationMinutes = Math.floor((now.getTime() - startTime.getTime()) / 60000);
 
-        await addDoc(collection(db, 'task_sessions'), {
+        const sessionRef = doc(collection(db, 'task_sessions'));
+        batch.set(sessionRef, {
           task_id: taskDoc.id,
           user_id: user.id,
           start_time: taskData.active_session_start,
@@ -186,13 +195,14 @@ export const useAttendance = () => {
           type: 'break_auto_pause'
         });
 
-        await updateDoc(doc(db, 'tasks', taskDoc.id), {
+        batch.update(doc(db, 'tasks', taskDoc.id), {
           active_session_id: null,
           active_session_start: null,
           is_paused_by_break: true,
           total_minutes_logged: (taskData.total_minutes_logged || 0) + durationMinutes
         });
       }
+      await batch.commit();
 
       // Add to audit logs
       await addDoc(collection(db, 'audit_logs'), {

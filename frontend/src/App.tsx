@@ -1,5 +1,11 @@
 import React from "react"; // App Component
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from "react-router-dom";
 import { Toaster, toast, ToastBar } from "react-hot-toast";
 import { X } from "lucide-react";
 import { useAuthStore } from "./store/useAuthStore";
@@ -12,6 +18,7 @@ import { db } from "./firebase";
 import { auth } from "./firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { useAttendanceStore } from "./store/useAttendanceStore";
 
 // Pages (to be created)
 const Login = React.lazy(() => import("./pages/Login"));
@@ -29,7 +36,11 @@ const Leaves = React.lazy(() => import("./pages/Leaves"));
 const Sprints = React.lazy(() => import("./pages/Sprints"));
 const Meets = React.lazy(() => import("./pages/Meets"));
 const AdminLogs = React.lazy(() => import("./pages/AdminLogs.tsx"));
+const AdminLateCheckInRequests = React.lazy(
+  () => import("./pages/AdminLateCheckInRequests.tsx"),
+);
 const Profile = React.lazy(() => import("./pages/Profile"));
+const LateCheckIn = React.lazy(() => import("./pages/LateCheckIn"));
 
 const ProtectedRoute = ({
   children,
@@ -40,10 +51,21 @@ const ProtectedRoute = ({
 }) => {
   const { user } = useAuthStore();
   const { isCollapsed } = useSidebarStore();
+  const location = useLocation();
+  const { attendance } = useAttendanceStore();
   const [isFocusMode, setIsFocusMode] = React.useState(false);
 
   if (!user) return <Navigate to="/login" />;
   if (roles && user && !roles.includes(user.role)) return <Navigate to="/" />;
+  if (
+    user.role !== "admin" &&
+    attendance?.check_in &&
+    !attendance?.work_started_at &&
+    !attendance?.check_out &&
+    location.pathname !== "/daily-scrum"
+  ) {
+    return <Navigate to="/daily-scrum" replace />;
+  }
 
   return (
     <div className="flex bg-background min-h-screen">
@@ -106,9 +128,28 @@ function App() {
   React.useEffect(() => {
     let profileUnsubscribe: () => void = () => {};
 
+    const setAuthFromProfile = (
+      firebaseUser: any,
+      userData: any,
+    ) => {
+      setAuth({
+        id: firebaseUser.uid,
+        name: userData.name || firebaseUser.displayName || "User",
+        email: firebaseUser.email!,
+        role: userData.role || "employee",
+        department: userData.department,
+        avatar_url: userData.avatar_url || firebaseUser.photoURL || undefined,
+        is_active: userData.is_active ?? true,
+        is_verified: userData.is_verified ?? true,
+        availability_status: userData.availability_status || "available",
+      });
+      setLoading(false);
+    };
+
     const authUnsubscribe = onAuthStateChanged(
       auth,
       async (firebaseUser: any) => {
+        profileUnsubscribe(); // Cleanup any existing listener before creating a new one
         try {
           if (firebaseUser) {
             // Use onSnapshot for real-time profile updates (syncs status, name, etc.)
@@ -116,31 +157,27 @@ function App() {
               doc(db, "users", firebaseUser.uid),
               async (userDoc) => {
                 if (userDoc.exists()) {
-                  const userData = userDoc.data();
-                  setAuth(
-                    {
-                      id: firebaseUser.uid,
-                      name: userData.name || firebaseUser.displayName || "User",
-                      email: firebaseUser.email!,
-                      role: userData.role || "employee",
-                      department: userData.department,
-                      avatar_url:
-                        userData.avatar_url ||
-                        firebaseUser.photoURL ||
-                        undefined,
-                      is_active: userData.is_active ?? true,
-                      is_verified: userData.is_verified ?? true,
-                      availability_status:
-                        userData.availability_status || "available",
-                    },
-                  );
-                  setLoading(false);
+                  setAuthFromProfile(firebaseUser, userDoc.data());
                 } else {
                   console.error("[Auth] Profile NOT found in Firestore");
                   toast.error("Profile not found in database.");
                   logout();
                   setLoading(false);
                 }
+              },
+              async (err) => {
+                console.error("[Auth] Profile listener error:", err);
+                try {
+                  const profileSnap = await getDoc(doc(db, "users", firebaseUser.uid));
+                  if (profileSnap.exists()) {
+                    setAuthFromProfile(firebaseUser, profileSnap.data());
+                    return;
+                  }
+                } catch (fallbackErr) {
+                  console.error("[Auth] Profile fallback read failed:", fallbackErr);
+                }
+
+                setLoading(false);
               },
             );
           } else {
@@ -236,6 +273,14 @@ function App() {
           }
         />
         <Route
+          path="/late-checkin"
+          element={
+            <ProtectedRoute>
+              <LateCheckIn />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/leaves"
           element={
             <ProtectedRoute>
@@ -294,7 +339,7 @@ function App() {
         <Route
           path="/reports"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={["admin", "manager"]}>
               <Reports />
             </ProtectedRoute>
           }
@@ -304,6 +349,14 @@ function App() {
           element={
             <ProtectedRoute roles={["admin"]}>
               <AdminLogs />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/late-checkin-requests"
+          element={
+            <ProtectedRoute roles={["admin"]}>
+              <AdminLateCheckInRequests />
             </ProtectedRoute>
           }
         />

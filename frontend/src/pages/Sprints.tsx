@@ -4,13 +4,15 @@ import {
   Users, User as UserIcon, X, Check, Trash2, Edit2, Video
 } from 'lucide-react';
 import { db } from '../firebase.ts';
-import { collection, getDocs, doc, addDoc, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, addDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy, limit, where } from 'firebase/firestore';
 import { useTitle } from '../hooks/useTitle';
 import ProgressBar from '../components/ProgressBar';
 import StatusBadge from '../components/StatusBadge';
 import { useAuthStore } from '../store/useAuthStore';
 import { toast } from 'react-hot-toast';
 import Avatar from '../components/Avatar';
+import { getUsersCached } from '../lib/firestoreCache';
+import { scopedProjectsQuery } from '../lib/firestoreQueries';
 
 interface Sprint {
   id: string;
@@ -91,17 +93,40 @@ const Sprints: React.FC = () => {
 
   const fetchSprints = async () => {
     try {
-      const snap = await getDocs(collection(db, 'sprints'));
+      const snap = await getDocs(query(collection(db, 'sprints'), orderBy('created_at', 'desc'), limit(100)));
       setSprints(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Sprint[]);
     } catch (err) { console.error(err); }
     finally { setIsLoading(false); }
   };
 
+  const parseCreatedAtTime = (value: any) => {
+    if (!value) return 0;
+    if (value?.toDate) return value.toDate().getTime();
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+
   const fetchMetadata = async () => {
-    const projSnap = await getDocs(collection(db, 'projects'));
-    setProjects(projSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-    const userSnap = await getDocs(collection(db, 'users'));
-    setUsers(userSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    if (!user?.id) return;
+    let projectDocs: any[] = [];
+    try {
+      const projSnap = await getDocs(scopedProjectsQuery(user, 100));
+      projectDocs = projSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (err: any) {
+      if (!String(err?.message || "").includes("requires an index")) {
+        throw err;
+      }
+      const fallbackQuery =
+        user.role === 'admin' || user.role === 'manager'
+          ? query(collection(db, 'projects'), limit(100))
+          : query(collection(db, 'projects'), where('members', 'array-contains', user.id), limit(100));
+      const fallbackSnap = await getDocs(fallbackQuery);
+      projectDocs = fallbackSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => parseCreatedAtTime(b.created_at) - parseCreatedAtTime(a.created_at));
+    }
+    setProjects(projectDocs);
+    setUsers(await getUsersCached());
   };
 
   const startMeet = async (sprint: Sprint, targetUserId?: string) => {

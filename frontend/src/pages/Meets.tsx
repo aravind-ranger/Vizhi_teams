@@ -4,10 +4,11 @@ import {
   FileText, Upload, X, File, Link as LinkIcon, MessageSquare, Send, MoreVertical, Trash2, Pencil, Image
 } from 'lucide-react';
 import { db } from '../firebase.ts';
-import { collection, query, getDocs, orderBy, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { useAuthStore } from '../store/useAuthStore';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
+import { getUsersCached } from '../lib/firestoreCache';
 
 interface MeetMessage {
   id: string;
@@ -74,8 +75,7 @@ const Meets: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const snap = await getDocs(collection(db, 'users'));
-      setUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setUsers(await getUsersCached());
     } catch (err) {
       console.error(err);
     }
@@ -83,7 +83,7 @@ const Meets: React.FC = () => {
 
   const fetchMeets = async () => {
     try {
-      const q = query(collection(db, 'meets'), orderBy('created_at', 'desc'));
+      const q = query(collection(db, 'meets'), orderBy('created_at', 'desc'), limit(100));
       const snap = await getDocs(q);
       const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Meet[];
       setMeets(data);

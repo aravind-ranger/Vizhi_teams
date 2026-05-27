@@ -10,7 +10,7 @@ import {
   eachDayOfInterval, parseISO, isPast, isToday as isDateToday
 } from 'date-fns';
 import { db } from '../firebase.ts';
-import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, where, orderBy, limit } from 'firebase/firestore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTitle } from '../hooks/useTitle';
 import { toast } from 'react-hot-toast';
@@ -48,13 +48,21 @@ const CalendarPage: React.FC = () => {
   useTitle('Calendar');
 
   useEffect(() => {
-    const q = query(collection(db, 'calendar_events'));
+    const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
+    const end = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
+    const q = query(
+      collection(db, 'calendar_events'),
+      where('date', '>=', start),
+      where('date', '<=', end),
+      orderBy('date', 'asc'),
+      limit(60)
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CalendarEvent)));
       setIsLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [currentMonth]);
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));

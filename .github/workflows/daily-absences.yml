@@ -18,6 +18,20 @@ jobs:
         with:
           node-version: 20
 
+      - name: Verify Firebase secrets
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+        run: |
+          test -n "$FIREBASE_SERVICE_ACCOUNT_JSON" || {
+            echo "Missing repository secret: FIREBASE_SERVICE_ACCOUNT_JSON"
+            exit 1
+          }
+          test -n "$FIREBASE_PROJECT_ID" || {
+            echo "Missing repository secret: FIREBASE_PROJECT_ID"
+            exit 1
+          }
+
       - name: Install runtime dependency
         run: npm install --no-save firebase-admin@11
 

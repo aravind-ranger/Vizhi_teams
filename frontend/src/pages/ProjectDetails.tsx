@@ -23,7 +23,7 @@ import {
   verticalListSortingStrategy 
 } from '@dnd-kit/sortable';
 import { db } from '../firebase.ts';
-import { doc, getDoc, collection, query, where, getDocs, updateDoc, addDoc, serverTimestamp, onSnapshot, orderBy } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, addDoc, serverTimestamp, onSnapshot, orderBy, limit, getCountFromServer } from 'firebase/firestore';
 import KanbanColumn from '../components/KanbanColumn';
 import KanbanTask from '../components/KanbanTask';
 import Avatar from '../components/Avatar';
@@ -32,6 +32,7 @@ import PriorityBadge from '../components/PriorityBadge';
 
 import { useAuthStore } from '../store/useAuthStore';
 import { useAttendanceStore } from '../store/useAttendanceStore';
+import { getUsersCached } from '../lib/firestoreCache';
 import { toast } from 'react-hot-toast';
 
 interface Task {
@@ -102,7 +103,7 @@ const ProjectDetails: React.FC = () => {
     });
 
     const tasksRef = collection(db, 'tasks');
-    const qTasks = query(tasksRef, where('project_id', '==', id));
+    const qTasks = query(tasksRef, where('project_id', '==', id), limit(200));
 
     const unsubscribeTasks = onSnapshot(qTasks, (snapshot) => {
       setTasks(snapshot.docs.map(doc => ({ 
@@ -114,7 +115,7 @@ const ProjectDetails: React.FC = () => {
     });
 
     const sprintsRef = collection(db, 'sprints');
-    const qSprints = query(sprintsRef, where('project_id', '==', id));
+    const qSprints = query(sprintsRef, where('project_id', '==', id), limit(50));
     const unsubscribeSprints = onSnapshot(qSprints, (snapshot) => {
       setSprints(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
@@ -173,18 +174,23 @@ const ProjectDetails: React.FC = () => {
   }, [isPaused, tasks.length]);
 
   const fetchMetadata = async () => {
-    const empSnap = await getDocs(collection(db, 'users'));
-    setEmployees(empSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const cachedUsers = await getUsersCached();
+    setEmployees(cachedUsers);
   };
 
   const updateProjectProgress = async () => {
     if (!id) return;
     try {
-      const q = query(collection(db, 'tasks'), where('project_id', '==', id));
-      const snap = await getDocs(q);
-      const allTasks = snap.docs.map(d => d.data());
-      const total = allTasks.length;
-      const completed = allTasks.filter(t => t.status === 'done').length;
+      const qTotal = query(collection(db, 'tasks'), where('project_id', '==', id));
+      const qCompleted = query(collection(db, 'tasks'), where('project_id', '==', id), where('status', '==', 'done'));
+      
+      const [totalSnap, completedSnap] = await Promise.all([
+        getCountFromServer(qTotal),
+        getCountFromServer(qCompleted)
+      ]);
+
+      const total = totalSnap.data().count;
+      const completed = completedSnap.data().count;
       
       await updateDoc(doc(db, 'projects', id), {
         total_tasks: total,

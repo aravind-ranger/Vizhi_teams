@@ -38,6 +38,8 @@ import {
   onSnapshot,
   writeBatch,
   deleteDoc,
+  getCountFromServer,
+  limit,
 } from "firebase/firestore";
 import { useTitle } from "../hooks/useTitle";
 import StatusBadge from "../components/StatusBadge";
@@ -45,6 +47,7 @@ import PriorityBadge from "../components/PriorityBadge";
 import Avatar from "../components/Avatar";
 import { useAuthStore } from "../store/useAuthStore";
 import { useAttendanceStore } from "../store/useAttendanceStore";
+import { getUsersCached, getProjectsCached } from "../lib/firestoreCache";
 
 interface Task {
   id: string;
@@ -166,12 +169,26 @@ const Tasks: React.FC = () => {
     localStorage.setItem("task_form_backup", JSON.stringify(form));
   }, [form]);
 
+  const fetchMetadata = async () => {
+    try {
+      // Fetch Projects (Cached)
+      const cachedProjects = await getProjectsCached();
+      setProjects(cachedProjects);
+
+      // Fetch Employees (Cached)
+      const cachedUsers = await getUsersCached();
+      setEmployees(cachedUsers);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchMetadata();
 
-    // Real-time listener for tasks
+    // Real-time listener for tasks (Limited to 200 to prevent unbounded quota usage)
     const tasksRef = collection(db, "tasks");
-    const q = query(tasksRef, orderBy("created_at", "desc"));
+    const q = query(tasksRef, orderBy("created_at", "desc"), limit(200));
 
     const unsubscribe = onSnapshot(
       q,
@@ -208,6 +225,25 @@ const Tasks: React.FC = () => {
   // Sync tasks with Attendance Breaks
   const { attendance } = useAttendanceStore();
   const isPaused = attendance?.is_paused;
+  const hasActiveAttendanceSession = Boolean(
+    attendance?.check_in && !attendance?.check_out,
+  );
+  const canManageTaskActions =
+    user?.role === "admin" ||
+    user?.role === "manager" ||
+    hasActiveAttendanceSession;
+  const taskLockMessage = "You must be checked in to manage tasks ⚠️";
+
+  const getTaskLockReason = () => {
+    if (user?.role === "admin" || user?.role === "manager") return "";
+    if (attendance?.check_out)
+      return "You have checked out for the day. Check in to create or resume tasks.";
+    if (!attendance?.check_in)
+      return "You must check in to create or resume tasks.";
+    if (attendance?.is_paused)
+      return "You are on a break. Resume work to manage task timers.";
+    return taskLockMessage;
+  };
 
   useEffect(() => {
     const syncBreakWithTasks = async () => {
@@ -262,31 +298,26 @@ const Tasks: React.FC = () => {
     }
   }, [isPaused, tasks.length, user?.id]);
 
-  const fetchMetadata = async () => {
-    try {
-      // Fetch Projects
-      const projSnap = await getDocs(collection(db, "projects"));
-      setProjects(projSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-
-      // Fetch Employees
-      const empSnap = await getDocs(collection(db, "users"));
-      setEmployees(empSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   const updateProjectProgress = async (projectId: string) => {
     if (!projectId) return;
     try {
-      const q = query(
+      const qTotal = query(
         collection(db, "tasks"),
         where("project_id", "==", projectId),
       );
-      const snap = await getDocs(q);
-      const allTasks = snap.docs.map((d) => d.data());
-      const total = allTasks.length;
-      const completed = allTasks.filter((t) => t.status === "done").length;
+      const qCompleted = query(
+        collection(db, "tasks"),
+        where("project_id", "==", projectId),
+        where("status", "==", "done"),
+      );
+
+      const [totalSnap, completedSnap] = await Promise.all([
+        getCountFromServer(qTotal),
+        getCountFromServer(qCompleted),
+      ]);
+
+      const total = totalSnap.data().count;
+      const completed = completedSnap.data().count;
 
       await updateDoc(doc(db, "projects", projectId), {
         total_tasks: total,
@@ -299,8 +330,8 @@ const Tasks: React.FC = () => {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!attendance?.check_in || attendance?.check_out) {
-      toast.error("You must be checked in to create tasks ⚠️");
+    if (!canManageTaskActions) {
+      toast.error(taskLockMessage);
       return;
     }
     try {
@@ -365,6 +396,10 @@ const Tasks: React.FC = () => {
   const handleUpdateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTask) return;
+    if (!canManageTaskActions) {
+      toast.error(taskLockMessage);
+      return;
+    }
     try {
       const taskRef = doc(db, "tasks", selectedTask.id);
       await updateDoc(taskRef, {
@@ -384,6 +419,10 @@ const Tasks: React.FC = () => {
 
   const handleDeleteTask = async () => {
     if (!taskToDelete) return;
+    if (!canManageTaskActions) {
+      toast.error(taskLockMessage);
+      return;
+    }
     try {
       await deleteDoc(doc(db, "tasks", taskToDelete));
 
@@ -413,6 +452,10 @@ const Tasks: React.FC = () => {
   };
 
   const approveTask = async (taskId: string) => {
+    if (!canManageTaskActions) {
+      toast.error(taskLockMessage);
+      return;
+    }
     try {
       const taskRef = doc(db, "tasks", taskId);
       const taskSnap = await getDoc(taskRef);
@@ -445,6 +488,10 @@ const Tasks: React.FC = () => {
   };
 
   const rejectTask = async (taskId: string, reason: string) => {
+    if (!canManageTaskActions) {
+      toast.error(taskLockMessage);
+      return;
+    }
     try {
       const taskRef = doc(db, "tasks", taskId);
       const taskSnap = await getDoc(taskRef);
@@ -473,8 +520,8 @@ const Tasks: React.FC = () => {
   };
 
   const toggleTimer = async (taskId: string, isActive: boolean) => {
-    if (!attendance?.check_in || attendance?.check_out) {
-      toast.error("You must be checked in to work on tasks ⚠️");
+    if (!canManageTaskActions) {
+      toast.error(taskLockMessage);
       return;
     }
 
@@ -561,6 +608,10 @@ const Tasks: React.FC = () => {
   };
 
   const updateStatus = async (taskId: string, newStatus: string) => {
+    if (!canManageTaskActions) {
+      toast.error(taskLockMessage);
+      return;
+    }
     try {
       const taskRef = doc(db, "tasks", taskId);
       const taskData = tasks.find((t) => t.id === taskId);
@@ -734,7 +785,14 @@ const Tasks: React.FC = () => {
             </button>
           </div>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => {
+              if (!canManageTaskActions) {
+                toast.error(taskLockMessage);
+                return;
+              }
+              setShowCreateModal(true);
+            }}
+            disabled={!canManageTaskActions}
             className="flex items-center space-x-3 px-6 h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
           >
             <Plus className="w-5 h-5" />
@@ -742,6 +800,21 @@ const Tasks: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {!canManageTaskActions && (
+        <div className="glass rounded-2xl border border-white/10 p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-500 mt-1" />
+          <div>
+            <p className="text-sm font-bold text-text-primary">
+              {getTaskLockReason()}
+            </p>
+            <p className="text-xs text-text-muted mt-1">
+              You can check in from the Attendance page or complete your Daily
+              Scrum to resume task creation and timers.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col space-y-4">
         <div className="flex flex-col md:flex-row gap-4">
@@ -950,6 +1023,10 @@ const Tasks: React.FC = () => {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (!canManageTaskActions) {
+                                      toast.error(taskLockMessage);
+                                      return;
+                                    }
                                     setSelectedTask(task);
                                     setShowEditModal(true);
                                     setOpenMenuId(null);
@@ -961,6 +1038,10 @@ const Tasks: React.FC = () => {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (!canManageTaskActions) {
+                                      toast.error(taskLockMessage);
+                                      return;
+                                    }
                                     setTaskToDelete(task.id);
                                     setShowDeleteModal(true);
                                     setOpenMenuId(null);
@@ -992,8 +1073,13 @@ const Tasks: React.FC = () => {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (!canManageTaskActions) {
+                                    toast.error(taskLockMessage);
+                                    return;
+                                  }
                                   approveTask(task.id);
                                 }}
+                                disabled={!canManageTaskActions}
                                 className="flex-1 py-2 px-4 bg-success/10 text-success text-xs font-black rounded-xl hover:bg-success hover:text-white transition-all uppercase tracking-widest"
                               >
                                 ✓ Approve
@@ -1001,11 +1087,16 @@ const Tasks: React.FC = () => {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (!canManageTaskActions) {
+                                    toast.error(taskLockMessage);
+                                    return;
+                                  }
                                   const reason = prompt(
                                     "Reason for rejection:",
                                   );
                                   if (reason) rejectTask(task.id, reason);
                                 }}
+                                disabled={!canManageTaskActions}
                                 className="flex-1 py-2 px-4 bg-danger/10 text-danger text-xs font-black rounded-xl hover:bg-danger hover:text-white transition-all uppercase tracking-widest"
                               >
                                 ✕ Reject
@@ -1031,9 +1122,15 @@ const Tasks: React.FC = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (!canManageTaskActions) {
+                                toast.error(taskLockMessage);
+                                return;
+                              }
                               toggleTimer(task.id, !!task.active_session_id);
                             }}
-                            disabled={!task.is_approved}
+                            disabled={
+                              !task.is_approved || !canManageTaskActions
+                            }
                             className={`p-2.5 rounded-xl transition-all ${
                               !task.is_approved
                                 ? "bg-gray-100 text-gray-300 cursor-not-allowed"
@@ -1159,8 +1256,13 @@ const Tasks: React.FC = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (!canManageTaskActions) {
+                              toast.error(taskLockMessage);
+                              return;
+                            }
                             toggleTimer(task.id, !!task.active_session_id);
                           }}
+                          disabled={!canManageTaskActions}
                           className={`p-3 rounded-xl transition-all shadow-sm ${
                             task.active_session_id
                               ? "bg-danger text-white hover:bg-danger-hover"
@@ -1193,6 +1295,10 @@ const Tasks: React.FC = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (!canManageTaskActions) {
+                                  toast.error(taskLockMessage);
+                                  return;
+                                }
                                 setSelectedTask(task);
                                 setShowEditModal(true);
                                 setOpenMenuId(null);
@@ -1205,6 +1311,10 @@ const Tasks: React.FC = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (!canManageTaskActions) {
+                                  toast.error(taskLockMessage);
+                                  return;
+                                }
                                 setTaskToDelete(task.id);
                                 setShowDeleteModal(true);
                                 setOpenMenuId(null);
@@ -1321,6 +1431,7 @@ const Tasks: React.FC = () => {
                     onChange={(e) =>
                       updateStatus(selectedTask.id, e.target.value)
                     }
+                    disabled={!canManageTaskActions}
                     className="w-full h-14 px-5 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-2xl font-black text-xs uppercase tracking-widest outline-none ring-primary/10 focus:ring-4 transition-all appearance-none cursor-pointer text-text-primary dark:text-white"
                   >
                     <option value="todo" className="dark:bg-slate-900">
@@ -1406,6 +1517,7 @@ const Tasks: React.FC = () => {
                       !!selectedTask.active_session_id,
                     )
                   }
+                  disabled={!canManageTaskActions}
                   className={`w-full h-16 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center space-x-4 shadow-xl transition-all active:scale-95 ${
                     selectedTask.active_session_id
                       ? "bg-danger text-white shadow-danger/25"

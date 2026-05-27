@@ -13,11 +13,6 @@ import {
   FileText,
   MessageSquare,
   PieChart,
-  TrendingUp,
-  Play,
-  Square,
-  Home,
-  MapPin,
   Building,
   Activity,
   UserPlus,
@@ -52,8 +47,12 @@ import {
   getDoc,
   onSnapshot,
   Timestamp,
+  addDoc,
 } from "firebase/firestore";
 import UserListModal from "../components/UserListModal";
+import { attendanceRangeQuery } from "../lib/firestoreQueries";
+import { getUsersCached } from "../lib/firestoreCache";
+import { parseFirestoreDate } from "../lib/firestoreDates";
 
 const Dashboard: React.FC = () => {
   const safeFormat = (dateStr: any, fmt: string) => {
@@ -100,6 +99,43 @@ const Dashboard: React.FC = () => {
   const [presentEmployees, setPresentEmployees] = useState<any[]>([]);
   useTitle("Dashboard");
 
+  const quickActions = [
+    {
+      label: "Apply Leave",
+      icon: FileText,
+      color: "bg-emerald-50 text-emerald-600",
+      path: "/leaves",
+    },
+    {
+      label: "Daily Scrum",
+      icon: MessageSquare,
+      color: "bg-amber-50 text-amber-600",
+      path: "/daily-scrum",
+    },
+    ...(user?.role === "admin" || user?.role === "manager"
+      ? [
+          {
+            label: "View Reports",
+            icon: PieChart,
+            color: "bg-indigo-50 text-indigo-600",
+            path: "/reports",
+          },
+        ]
+      : []),
+    {
+      label: "New Task",
+      icon: Plus,
+      color: "bg-rose-50 text-rose-600",
+      path: "/tasks",
+    },
+  ];
+  const needsScrum = Boolean(
+    attendance?.check_in &&
+    !attendance?.work_started_at &&
+    !attendance?.check_out &&
+    !attendance?.is_overtime,
+  );
+
   useEffect(() => {
     if (user?.availability_status) {
       setCurrentStatus(user.availability_status);
@@ -111,7 +147,12 @@ const Dashboard: React.FC = () => {
 
     // 1. Real-time Stats & Tasks
     const tasksRef = collection(db, "tasks");
-    const qAll = query(tasksRef, where("assigned_to", "==", user.id));
+    const qAll = query(
+      tasksRef,
+      where("assigned_to", "==", user.id),
+      orderBy("created_at", "desc"),
+      limit(200),
+    );
 
     const unsubscribeStats = onSnapshot(qAll, (snap) => {
       const allTasks = snap.docs.map((doc) => ({
@@ -136,11 +177,13 @@ const Dashboard: React.FC = () => {
         total_tasks: snap.size,
         in_progress: allTasks.filter((t: any) => t.status === "in_progress")
           .length,
-        completed: allTasks.filter((t: any) => ["done", "completed"].includes(t.status)).length,
+        completed: allTasks.filter((t: any) =>
+          ["done", "completed"].includes(t.status),
+        ).length,
       }));
     });
 
-    // 2. Real-time Team Presence
+    // 2. Fetch Team Presence Data Once
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date();
@@ -148,25 +191,22 @@ const Dashboard: React.FC = () => {
 
     const usersRef = collection(db, "users");
     const leavesRef = collection(db, "leaves");
-    const attRef = collection(db, "attendance");
 
-    let allUsers: any[] = [];
+    const fetchTeamPresence = async () => {
+      try {
+        // Fetch active users using cache to prevent excessive reads
+        const cachedUsers = await getUsersCached();
+        const allUsers = cachedUsers.filter((u) => u.is_active !== false);
 
-    const unsubscribeUsers = onSnapshot(
-      query(usersRef, where("is_active", "==", true)),
-      (userSnap) => {
-        allUsers = userSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        updateTeamStats();
-      },
-    );
-
-    let onLeaveUserIds = new Set();
-    const unsubscribeLeaves = onSnapshot(
-      query(leavesRef, where("status", "==", "approved")),
-      (leaveSnap) => {
-        onLeaveUserIds = new Set();
+        // Fetch today's approved leaves
+        const todayStr = format(new Date(), "yyyy-MM-dd");
+        const leaveSnap = await getDocs(
+          query(leavesRef, where("to_date", ">=", todayStr)),
+        );
+        const onLeaveUserIds = new Set();
         leaveSnap.docs.forEach((d) => {
           const leave = d.data();
+          if (leave.status !== "approved") return;
           const from = leave.from_date?.toDate
             ? leave.from_date.toDate()
             : new Date(leave.from_date);
@@ -177,97 +217,115 @@ const Dashboard: React.FC = () => {
             onLeaveUserIds.add(leave.user_id);
           }
         });
-        updateTeamStats();
-      },
-    );
 
-    let presentUsers: any[] = [];
-    const unsubscribeAtt = onSnapshot(attRef, (attSnap) => {
-      const presentIds = new Set();
-      const records: any[] = [];
-      attSnap.docs.forEach((d) => {
-        const data = d.data();
-        const createdAt = data.created_at?.toDate
-          ? data.created_at.toDate()
-          : new Date(data.created_at);
-        if (createdAt >= todayStart && createdAt <= todayEnd) {
-          presentIds.add(data.user_id);
-          records.push({ id: d.id, ...data, createdAt });
-        }
-      });
-
-      presentUsers = records;
-      updateTeamStats();
-    });
-
-    const updateTeamStats = () => {
-      if (allUsers.length === 0) return;
-
-      const presentIds = new Set(presentUsers.map((r) => r.user_id));
-      const presentList = allUsers
-        .filter((u) => presentIds.has(u.id))
-        .map((u) => {
-          const userRecords = presentUsers
-            .filter((r) => r.user_id === u.id)
-            .sort((a, b) => b.createdAt - a.createdAt);
-          return {
-            ...u,
-            check_in: userRecords[0]?.check_in,
-            work_location: userRecords[0]?.work_location,
-          };
+        // Fetch today's attendance
+        const attendanceQueryUser =
+          user?.role === "admin" || user?.role === "manager"
+            ? undefined
+            : user?.id;
+        const attSnap = await getDocs(
+          attendanceRangeQuery(todayStart, todayEnd, attendanceQueryUser, 500),
+        );
+        const presentIds = new Set();
+        const presentUsers: any[] = [];
+        attSnap.docs.forEach((d) => {
+          const data = d.data();
+          const createdAt =
+            parseFirestoreDate(data.created_at) ||
+            parseFirestoreDate(data.check_in);
+          const checkIn = parseFirestoreDate(data.check_in);
+          const isPresentLike = Boolean(checkIn) && data.status !== "absent";
+          if (
+            createdAt &&
+            createdAt >= todayStart &&
+            createdAt <= todayEnd &&
+            isPresentLike
+          ) {
+            presentIds.add(data.user_id);
+            presentUsers.push({ id: d.id, ...data, check_in: checkIn, createdAt });
+          }
         });
 
-      const onLeaveList = allUsers.filter((u) => onLeaveUserIds.has(u.id));
-      const absentList = allUsers.filter(
-        (u) =>
-          !presentIds.has(u.id) &&
-          !onLeaveUserIds.has(u.id) &&
-          u.role !== "admin",
-      );
+        // Calculate Stats
+        const presentList = allUsers
+          .filter((u) => presentIds.has(u.id))
+          .map((u) => {
+            const userRecords = presentUsers
+              .filter((r) => r.user_id === u.id)
+              .sort((a, b) => b.createdAt - a.createdAt);
+            return {
+              ...u,
+              check_in: userRecords[0]?.check_in,
+              work_location: userRecords[0]?.work_location,
+            };
+          });
 
-      setPresentEmployees(presentList);
-      setAbsentEmployees(absentList);
-      setStats((prev) => ({
-        ...prev,
-        present_count: presentList.length,
-        absent_count: absentList.length,
-        on_leave_count: onLeaveList.length,
-      }));
-      setIsLoading(false);
+        const onLeaveList = allUsers.filter((u) => onLeaveUserIds.has(u.id));
+        const absentList = allUsers.filter(
+          (u: any) =>
+            !presentIds.has(u.id) &&
+            !onLeaveUserIds.has(u.id) &&
+            u.role !== "admin",
+        );
+
+        setPresentEmployees(presentList);
+        setAbsentEmployees(absentList);
+        setStats((prev) => ({
+          ...prev,
+          present_count: presentList.length,
+          absent_count: absentList.length,
+          on_leave_count: onLeaveList.length,
+        }));
+      } catch (err) {
+        console.error("Error fetching team presence:", err);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
+    fetchTeamPresence();
+
     return () => {
-      unsubscribeUsers();
-      unsubscribeLeaves();
-      unsubscribeAtt();
+      unsubscribeStats();
     };
   }, [user]);
 
   useEffect(() => {
-    // Subscribe to Calendar Events
-    const qCal = query(collection(db, "calendar_events"));
-    const unsubscribe = onSnapshot(qCal, (snap) => {
-      const nowStr = format(new Date(), "yyyy-MM-dd");
-      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as any);
+    // Fetch Calendar Events Once
+    const fetchCalendarEvents = async () => {
+      try {
+        const qCal = query(collection(db, "calendar_events"));
+        const snap = await getDocs(qCal);
+        const nowStr = format(new Date(), "yyyy-MM-dd");
+        const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as any);
 
-      // Dashboard view (promoted + upcoming)
-      const promoted = all
-        .filter((e) => e.is_promoted_to_dashboard && e.date >= nowStr)
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .slice(0, 10);
-      setCalendarEvents(promoted);
+        // Dashboard view (promoted + upcoming)
+        const promoted = all
+          .filter((e) => e.is_promoted_to_dashboard && e.date >= nowStr)
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .slice(0, 10);
+        setCalendarEvents(promoted);
 
-      // All for picker (Admin)
-      if (user?.role === "admin") {
-        setAllEvents(all.sort((a, b) => b.date.localeCompare(a.date)));
+        // All for picker (Admin)
+        if (user?.role === "admin") {
+          setAllEvents(all.sort((a, b) => b.date.localeCompare(a.date)));
+        }
+      } catch (err) {
+        console.error("Error fetching calendar:", err);
       }
-    });
-    return () => unsubscribe();
+    };
+
+    fetchCalendarEvents();
   }, [user?.role]);
 
   const toggleTimer = async (taskId: string, isActive: boolean) => {
     if (!attendance?.check_in || attendance?.check_out) {
       toast.error("You must be checked in to work on tasks ⚠️");
+      return;
+    }
+
+    if (!attendance?.work_started_at) {
+      toast.error("Please submit your Daily Scrum before starting work");
       return;
     }
 
@@ -296,152 +354,34 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     let interval: any;
-    if (
-      attendance?.check_in &&
-      !attendance?.check_out &&
-      !attendance?.is_paused
-    ) {
+    const workStartTime = attendance?.work_started_at
+      ? new Date(attendance.work_started_at)
+      : null;
+
+    if (workStartTime && !attendance?.check_out && !attendance?.is_paused) {
       interval = setInterval(() => {
-        const checkInTime = new Date(attendance.check_in!);
+        const checkInTime = workStartTime;
         const now = new Date();
-        const breakSeconds = (attendance.total_break_ms || 0) / 1000;
+        const breakSeconds = (attendance?.total_break_ms || 0) / 1000;
         const diff =
           8 * 3600 - (differenceInSeconds(now, checkInTime) - breakSeconds);
         setTimeLeft(diff);
       }, 1000);
       return () => clearInterval(interval);
     } else if (attendance?.is_paused && attendance.pause_start) {
-      const checkInTime = new Date(attendance.check_in!);
+      const checkInTime = workStartTime || new Date(attendance.check_in!);
       const pauseTime = new Date(attendance.pause_start);
-      const breakSeconds = (attendance.total_break_ms || 0) / 1000;
+      const breakSeconds = (attendance?.total_break_ms || 0) / 1000;
       const diff =
         8 * 3600 - (differenceInSeconds(pauseTime, checkInTime) - breakSeconds);
       setTimeLeft(diff);
-    } else if (!attendance?.check_in) {
+    } else if (!workStartTime) {
       setTimeLeft(null);
     }
   }, [attendance]);
 
-  // Calculate Performance Metrics
-  useEffect(() => {
-    if (!user?.id || !stats) return;
-
-    const calculatePerformance = async () => {
-      try {
-        const userTasks = allTasksRaw;
-
-        if (userTasks.length === 0) {
-          setEfficiency(0);
-          setPerformancePercentile(0);
-          setPerformanceBreakdown({
-            completion: 0,
-            priorityCompletion: 0,
-            onTime: 0,
-          });
-          return;
-        }
-
-        // 1. Task Completion Rate (0-40 points)
-        const completedCount = userTasks.filter((t) =>
-          ["done", "completed"].includes(t.status),
-        ).length;
-        const completionRate = (completedCount / userTasks.length) * 100;
-        const completionScore = (completionRate / 100) * 40;
-
-        // 2. High Priority Task Completion (0-30 points)
-        const highPriorityTasks = userTasks.filter(
-          (t) => t.priority === "high",
-        );
-        const completedHighPriority = highPriorityTasks.filter((t) =>
-          ["done", "completed"].includes(t.status),
-        ).length;
-        const priorityScore =
-          highPriorityTasks.length > 0
-            ? (completedHighPriority / highPriorityTasks.length) * 30
-            : 0;
-
-        // 3. On-Time Completion (0-20 points)
-        const tasksWithDueDate = userTasks.filter((t) => t.due_date);
-        const onTimeCompletions = tasksWithDueDate.filter((t) => {
-          if (!["done", "completed"].includes(t.status)) return false;
-          const dueDate = new Date(t.due_date).getTime();
-          const completedDate = t.updated_at
-            ? new Date(t.updated_at).getTime()
-            : Date.now();
-          return completedDate <= dueDate;
-        }).length;
-        const onTimeScore =
-          tasksWithDueDate.length > 0
-            ? (onTimeCompletions / tasksWithDueDate.length) * 20
-            : 0;
-
-        // Calculate total efficiency score (sum of weighted components)
-        const totalScore = completionScore + priorityScore + onTimeScore;
-
-        // Get team performance for percentile calculation
-        const allUsersRef = collection(db, "users");
-        const allUsersSnap = await getDocs(
-          query(allUsersRef, where("is_active", "==", true)),
-        );
-
-        let teamPerformances: number[] = [];
-
-        for (const userDoc of allUsersSnap.docs) {
-          if (userDoc.id === user.id) {
-            teamPerformances.push(totalScore);
-            continue;
-          }
-
-          const tasksRef = collection(db, "tasks");
-          const userTasksSnap = await getDocs(
-            query(tasksRef, where("assigned_to", "==", userDoc.id)),
-          );
-          const otherUserTasks = userTasksSnap.docs.map((d) => ({
-            id: d.id,
-            ...d.data(),
-          }));
-
-          if (otherUserTasks.length > 0) {
-            const otherCompleted = otherUserTasks.filter((t) =>
-              ["done", "completed"].includes(t.status),
-            ).length;
-            const otherScore = (otherCompleted / otherUserTasks.length) * 100;
-            teamPerformances.push(otherScore);
-          }
-        }
-
-        // Calculate percentile
-        const sortedScores = teamPerformances.sort((a, b) => a - b);
-        const percentile =
-          sortedScores.length > 0
-            ? (sortedScores.filter((s) => s < totalScore).length /
-                sortedScores.length) *
-              100
-            : 0;
-
-        // previous max possible: 40 + 30 + 20 = 90, scale to 0-100
-        setEfficiency(Math.min(100, (totalScore / 90) * 100));
-        setPerformancePercentile(Math.round(percentile));
-        setPerformanceBreakdown({
-          completion: completionRate,
-          priorityCompletion:
-            highPriorityTasks.length > 0
-              ? (completedHighPriority / highPriorityTasks.length) * 100
-              : 0,
-          onTime:
-            tasksWithDueDate.length > 0
-              ? (onTimeCompletions / tasksWithDueDate.length) * 100
-              : 0,
-        });
-
-        // performanceBreakdown already set above
-      } catch (err) {
-        console.error("Error calculating performance:", err);
-      }
-    };
-
-    calculatePerformance();
-  }, [user?.id, stats, allTasksRaw, attendance]);
+  // NOTE: Performance score and percentile removed to reduce reads and client-side calculations.
+  // If needed in future, restore server-side aggregation and re-enable client display.
 
   const formatTimeLeft = (seconds: number) => {
     const isOvertime = seconds < 0;
@@ -505,7 +445,7 @@ const Dashboard: React.FC = () => {
         <div>
           <h2 className="text-4xl font-black text-text-primary tracking-tight">
             {getGreeting()},{" "}
-            <span className="text-primary">{user?.name.split(" ")[0]}</span> 
+            <span className="text-primary">{user?.name.split(" ")[0]}</span>
           </h2>
           <p className="text-text-muted mt-2 font-medium">
             Ready for another productive day at Vizhi?
@@ -537,23 +477,15 @@ const Dashboard: React.FC = () => {
                     await updateDoc(userRef, { availability_status: s.id });
                     setCurrentStatus(s.id);
 
-                    // Broadcast notification to all other users
-                    const usersSnap = await getDocs(collection(db, "users"));
-                    const batch = writeBatch(db);
-                    usersSnap.docs.forEach((u) => {
-                      if (u.id !== user!.id) {
-                        const notifRef = doc(collection(db, "notifications"));
-                        batch.set(notifRef, {
-                          user_id: u.id,
-                          title: `Status: ${user!.name} is ${s.label}`,
-                          message: `${user!.name} has changed their status to ${s.label}`,
-                          type: "status_change",
-                          is_read: false,
-                          created_at: serverTimestamp(),
-                        });
-                      }
+                    // Broadcast single system-wide status notification
+                    await addDoc(collection(db, "notifications"), {
+                      user_id: "all",
+                      title: `Status: ${user!.name} is ${s.label}`,
+                      message: `${user!.name} has changed their status to ${s.label}`,
+                      type: "status_change",
+                      is_read: false,
+                      created_at: serverTimestamp(),
                     });
-                    await batch.commit();
 
                     toast.success(`Status updated to ${s.label}`);
                   } catch (err) {
@@ -578,30 +510,32 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat, i) => (
-          <div
-            key={i}
-            onClick={stat.action}
-            className={`glass p-8 rounded-[32px] flex items-center space-x-6 border-none shadow-sm hover:shadow-xl transition-all group ${stat.action ? "cursor-pointer active:scale-95" : "cursor-default"}`}
-          >
+      {/* Stats Grid (visible to admin & manager only) */}
+      {(user?.role === "admin" || user?.role === "manager") && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {statCards.map((stat, i) => (
             <div
-              className={`p-4 rounded-2xl ${stat.bg} group-hover:scale-110 transition-transform`}
+              key={i}
+              onClick={stat.action}
+              className={`glass p-8 rounded-[32px] flex items-center space-x-6 border-none shadow-sm hover:shadow-xl transition-all group ${stat.action ? "cursor-pointer active:scale-95" : "cursor-default"}`}
             >
-              <stat.icon className={`w-8 h-8 ${stat.color}`} />
+              <div
+                className={`p-4 rounded-2xl ${stat.bg} group-hover:scale-110 transition-transform`}
+              >
+                <stat.icon className={`w-8 h-8 ${stat.color}`} />
+              </div>
+              <div>
+                <p className="text-xs font-black text-text-muted uppercase tracking-widest mb-1">
+                  {stat.label}
+                </p>
+                <p className="text-3xl font-black text-text-primary">
+                  {stat.value}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-black text-text-muted uppercase tracking-widest mb-1">
-                {stat.label}
-              </p>
-              <p className="text-3xl font-black text-text-primary">
-                {stat.value}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Admin Absence Tracker */}
       {user?.role === "admin" && absentEmployees.length > 0 && (
@@ -724,6 +658,22 @@ const Dashboard: React.FC = () => {
                     </div>
                   </div>
                 </div>
+              ) : needsScrum ? (
+                <div className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 rounded-[32px] p-12 text-center">
+                  <Clock className="w-16 h-16 text-amber-500 mx-auto mb-6" />
+                  <h4 className="text-3xl font-black text-amber-600 dark:text-amber-400 mb-2">
+                    Complete Scrum
+                  </h4>
+                  <p className="text-text-secondary font-bold mb-8">
+                    Please submit your Daily Scrum before starting work.
+                  </p>
+                  <button
+                    onClick={() => navigate("/daily-scrum")}
+                    className="inline-flex items-center px-6 py-3 rounded-2xl bg-amber-500 text-white font-black uppercase tracking-widest shadow-sm hover:scale-105 active:scale-95 transition-all"
+                  >
+                    Open Daily Scrum
+                  </button>
+                </div>
               ) : (
                 <div className="space-y-10">
                   <div className="flex flex-col md:flex-row justify-between items-center gap-8">
@@ -805,148 +755,15 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Tasks Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="glass p-8 rounded-[32px] border-none shadow-sm">
-              <div className="flex justify-between items-center mb-8">
-                <h3 className="text-xl font-black">Active Tasks</h3>
-                <button
-                  onClick={() => navigate("/tasks")}
-                  className="p-2 hover:bg-white/50 dark:hover:bg-white/10 rounded-full transition-colors"
-                >
-                  <ArrowRight className="w-5 h-5 text-primary" />
-                </button>
-              </div>
-              <div className="space-y-4">
-                {isLoading ? (
-                  [1, 2].map((i) => (
-                    <div key={i} className="skeleton h-20 rounded-2xl" />
-                  ))
-                ) : tasks.length === 0 ? (
-                  <p className="text-sm text-text-muted text-center py-4">
-                    No active tasks
-                  </p>
-                ) : (
-                  tasks.map((task) => (
-                    <div
-                      key={task.id}
-                      className="flex items-center justify-between p-4 bg-white/5 dark:bg-white/5 rounded-2xl border border-white/20 hover:shadow-md transition-all cursor-pointer group"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div
-                          className={`w-2 h-2 rounded-full ${task.active_session_id ? "bg-primary animate-ping" : "bg-gray-300 dark:bg-gray-700"}`}
-                        />
-                        <span className="text-sm font-bold truncate max-w-[150px]">
-                          {task.title}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (attendance?.is_paused) {
-                              toast.error(
-                                "Please resume work before starting/stopping tasks",
-                              );
-                              return;
-                            }
-                            toggleTimer(task.id, !!task.active_session_id);
-                          }}
-                          disabled={attendance?.is_paused}
-                          className={`p-1.5 rounded-lg transition-all ${attendance?.is_paused ? "opacity-50 grayscale cursor-not-allowed" : ""} ${task.active_session_id ? "bg-danger text-white" : "bg-primary/10 text-primary opacity-0 group-hover:opacity-100"}`}
-                        >
-                          {task.active_session_id ? (
-                            <Square className="w-3 h-3 fill-current" />
-                          ) : (
-                            <Play className="w-3 h-3 fill-current" />
-                          )}
-                        </button>
-                        <PriorityBadge priority={task.priority} />
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-            <div className="glass p-8 rounded-[32px] border-none shadow-sm bg-primary text-white relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-10">
-                <TrendingUp className="w-32 h-32" />
-              </div>
-              <h3 className="text-xl font-black mb-2 relative z-10">
-                Performance
-              </h3>
-              <p className="text-white/70 text-sm font-medium mb-8 relative z-10">
-                You're performing better than{" "}
-                <span className="font-black text-white">
-                  {performancePercentile}%
-                </span>{" "}
-                of your team this week!
-              </p>
-              <div className="flex items-end justify-between relative z-10">
-                <div className="space-y-1">
-                  <p className="text-4xl font-black">{efficiency.toFixed(1)}</p>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/50">
-                    Performance Score
-                  </p>
-                </div>
-                <div className="h-16 w-32 bg-white/10 rounded-xl backdrop-blur-sm border border-white/10 flex items-center justify-center">
-                  <TrendingUp className="w-8 h-8 text-white" />
-                </div>
-              </div>
-              <div className="mt-6 pt-6 border-t border-white/10 space-y-3 relative z-10">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-white/50">
-                    Task Completion
-                  </span>
-                  <span className="text-sm font-black">
-                    {performanceBreakdown.completion.toFixed(0)}%
-                  </span>
-                </div>
-                <div className="w-full bg-white/10 rounded-full h-1">
-                  <div
-                    className="bg-white/80 h-1 rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(100, performanceBreakdown.completion)}%`,
-                    }}
-                  />
-                </div>
-                {/* Time Utilization removed */}
-              </div>
-            </div>
-          </div>
+          {/* Active Tasks removed from dashboard to reduce reads and simplify UI */}
         </div>
 
         {/* Right Column: Quick Actions & Team */}
         <div className="space-y-8">
-          <div className="glass p-8 rounded-[32px] border-none shadow-sm">
+          <div className="glass p-8 rounded-[32px] border-none shadow-sm mx-auto min-h-[60vh]">
             <h3 className="text-xl font-black mb-8">Quick Launch</h3>
             <div className="grid grid-cols-2 gap-4">
-              {[
-                {
-                  label: "Apply Leave",
-                  icon: FileText,
-                  color: "bg-emerald-50 text-emerald-600",
-                  path: "/leaves",
-                },
-                {
-                  label: "Daily Scrum",
-                  icon: MessageSquare,
-                  color: "bg-amber-50 text-amber-600",
-                  path: "/daily-scrum",
-                },
-                {
-                  label: "View Reports",
-                  icon: PieChart,
-                  color: "bg-indigo-50 text-indigo-600",
-                  path: "/reports",
-                },
-                {
-                  label: "New Task",
-                  icon: Plus,
-                  color: "bg-rose-50 text-rose-600",
-                  path: "/tasks",
-                },
-              ].map((action, i) => (
+              {quickActions.map((action, i) => (
                 <button
                   key={i}
                   onClick={() => navigate(action.path)}
@@ -980,13 +797,13 @@ const Dashboard: React.FC = () => {
                 <CalendarIcon className="w-5 h-5 text-text-muted" />
               </div>
             </div>
-            <div className="space-y-6">
+            <div className="space-y-6 w-full max-w-md mx-auto">
               {calendarEvents.length > 0 ? (
                 calendarEvents.map((item, i) => (
                   <div
                     key={i}
                     onClick={() => setSelectedEventDetail(item)}
-                    className="flex items-start space-x-4 group cursor-pointer"
+                    className="flex items-start space-x-4 group cursor-pointer w-full"
                   >
                     <div
                       className={`w-1 h-12 rounded-full flex-shrink-0 transition-all group-hover:w-2 ${
@@ -997,7 +814,7 @@ const Dashboard: React.FC = () => {
                             : "bg-amber-500"
                       }`}
                     />
-                    <div>
+                    <div className="w-full">
                       <p className="text-sm font-black text-text-primary group-hover:text-primary transition-colors">
                         {item.title}
                       </p>
