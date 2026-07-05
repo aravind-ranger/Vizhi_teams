@@ -10,7 +10,8 @@
     "strict": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": false,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "types": ["node"]
   },
   "include": ["src/**/*"]
 }
