@@ -10,13 +10,14 @@ interface Task {
   id: string;
   title: string;
   description: string;
-  status: 'todo' | 'in_progress' | 'review' | 'done';
+  status: 'todo' | 'in_progress' | 'review' | 'done' | 'active' | 'completed' | 'planned' | 'pending' | 'paused_by_break';
   priority: 'low' | 'medium' | 'high';
   assignee_name: string;
   due_date: string;
   is_approved?: boolean;
   is_paused_by_break?: boolean;
   active_session_id?: string | null;
+  task_code?: string;
 }
 
 interface KanbanTaskProps {
@@ -73,9 +74,10 @@ const KanbanTask: React.FC<KanbanTaskProps> = ({ task, isOverlay }) => {
         </span>
       </div>
 
-      <h4 className="font-bold text-text-primary text-sm group-hover:text-primary transition-colors mb-2 line-clamp-2">
+      <h4 className="font-bold text-text-primary text-sm group-hover:text-primary transition-colors mb-1 line-clamp-2">
         {task.title}
       </h4>
+      {/* Task ID removed as per request */}
 
       {task.is_paused_by_break && (
         <div className="mb-3 py-1.5 px-3 bg-amber-50 text-amber-600 text-[9px] font-black rounded-lg text-center uppercase tracking-widest border border-amber-200 animate-pulse">
@@ -91,14 +93,7 @@ const KanbanTask: React.FC<KanbanTaskProps> = ({ task, isOverlay }) => {
 
       <div className="flex items-center justify-between mt-4">
         <div className="flex items-center space-x-3">
-          <span className="flex items-center text-[10px] font-bold text-text-muted">
-            <MessageSquare className="w-3 h-3 mr-1" />
-            2
-          </span>
-          <span className="flex items-center text-[10px] font-bold text-text-muted">
-            <Paperclip className="w-3 h-3 mr-1" />
-            1
-          </span>
+          {/* Comments and links removed as per request */}
         </div>
         <Avatar name={task.assignee_name || 'Unassigned'} size="xs" />
       </div>

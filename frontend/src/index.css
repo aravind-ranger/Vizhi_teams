@@ -1,30 +1,93 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --primary: 59 91 219;
+    --primary-hover: 52 81 199;
+    --success: 47 158 68;
+    --warning: 240 140 0;
+    --danger: 224 49 49;
+    --purple: 112 72 232;
+    --background: 248 249 250;
+    --glass: 255 255 255;
+    --border: 222 226 230;
+    --text-primary: 33 37 41;
+    --text-secondary: 73 80 87;
+    --text-muted: 134 142 150;
+  }
+
+  .dark {
+    --primary: 92 124 255;
+    --primary-hover: 110 140 255;
+    --success: 81 207 102;
+    --warning: 255 192 52;
+    --danger: 255 135 135;
+    --purple: 151 119 255;
+    --background: 11 17 32;
+    --glass: 23 32 53;
+    --border: 45 55 75;
+    --text-primary: 255 255 255;
+    --text-secondary: 209 213 219;
+    --text-muted: 156 163 175;
+  }
+
   body {
-    @apply bg-background text-text-primary font-sans antialiased;
+    @apply bg-background text-text-primary font-sans antialiased transition-colors duration-300;
   }
 }
 
 @layer components {
+  .glass {
+    @apply bg-glass/70 backdrop-blur-md border border-border/50;
+  }
+
   .btn-primary {
     @apply bg-primary hover:bg-primary-hover text-white rounded-button font-medium transition px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
-  
+
   .btn-secondary {
-    @apply bg-white border border-gray-300 hover:bg-gray-50 text-text-primary rounded-button font-medium transition px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-glass border border-border hover:bg-glass/90 text-text-primary rounded-button font-medium transition px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .card {
-    @apply bg-white rounded-card shadow-card border border-border;
+    @apply bg-glass rounded-card shadow-card border border-border;
   }
 
   .input {
-    @apply border border-gray-300 rounded-input px-3 py-2 focus:ring-4 focus:ring-primary focus:ring-opacity-20 focus:border-primary outline-none transition w-full;
+    @apply border border-gray-300 dark:border-white/10 rounded-input px-3 py-2 focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all w-full bg-white dark:bg-slate-800/50 text-text-primary placeholder:text-text-muted/50;
+  }
+
+  .input-field {
+    @apply w-full h-12 px-4 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm text-text-primary placeholder:text-text-muted/40;
+  }
+}
+
+/* Ensure native select option visibility in dark mode */
+.dark select,
+.dark select option {
+  background-color: rgb(var(--glass) / 1);
+  color: rgb(var(--text-primary) / 1);
+}
+
+/* Also ensure options in light mode use readable colors */
+select,
+select option {
+  background-color: rgb(var(--glass) / 1);
+  color: rgb(var(--text-primary) / 1);
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 }
 
@@ -37,17 +100,21 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #DEE2E6;
+  background: #dee2e6;
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #ADB5BD;
+  background: #adb5bd;
 }
 
 /* Animations */
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .skeleton {

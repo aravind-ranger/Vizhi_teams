@@ -73,13 +73,15 @@ async function runMarkDailyAbsences() {
       .where('created_at', '>=', Timestamp.fromDate(start))
       .where('created_at', '<', Timestamp.fromDate(end))
       .get(),
-    db.collection('leaves').where('status', '==', 'approved').get(),
+    db.collection('leaves').where('to_date', '>=', key).get(),
   ]);
 
   const usersWithAttendance = new Set(
     attendanceSnap.docs.map((doc) => doc.data().user_id).filter(Boolean),
   );
-  const approvedLeaves = leavesSnap.docs.map((doc) => doc.data());
+  const approvedLeaves = leavesSnap.docs
+    .map((doc) => doc.data())
+    .filter((leave) => leave.status === 'approved' && isApprovedLeaveForDay(leave, now));
   let batch = db.batch();
   let writes = 0;
   let absentCount = 0;
@@ -87,7 +89,7 @@ async function runMarkDailyAbsences() {
   for (const userDoc of usersSnap.docs) {
     const user = userDoc.data();
     if (user.role === 'admin' || usersWithAttendance.has(userDoc.id)) continue;
-    if (approvedLeaves.some((leave) => leave.user_id === userDoc.id && isApprovedLeaveForDay(leave, now))) continue;
+    if (approvedLeaves.some((leave) => leave.user_id === userDoc.id)) continue;
 
     const attendanceId = `${userDoc.id}_${key}`;
     const attendanceRef = db.collection('attendance').doc(attendanceId);
@@ -129,7 +131,11 @@ async function runMarkDailyAbsences() {
   }
 
   if (writes > 0) await batch.commit();
-  console.log(`Daily absence sweep completed. Auto-marked ${absentCount} employee(s) absent for ${key}.`);
+  console.log(
+    `Daily absence sweep completed. Checked ${usersSnap.size} active user(s), ` +
+      `${attendanceSnap.size} attendance record(s), ${leavesSnap.size} current/future leave record(s). ` +
+      `Auto-marked ${absentCount} employee(s) absent for ${key}.`,
+  );
 }
 
 runMarkDailyAbsences().catch((error) => {
