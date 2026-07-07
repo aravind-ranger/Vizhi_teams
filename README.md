@@ -43,8 +43,6 @@ Vizhi Teams is a premium, full-stack employee management and productivity portal
 * PostgreSQL (Database)
 * JSON Web Tokens (JWT Auth)
 
-**Hosting:**
-*Firebase
 ---
 
 ## 🚀 Getting Started
