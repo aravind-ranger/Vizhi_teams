@@ -35,7 +35,7 @@ Vizhi Teams is a premium, full-stack employee management and productivity portal
 * Zustand (Global State Management)
 * React Router DOM
 * @dnd-kit (Drag and Drop)
-* Lucide React (Icons)
+* Lucide React (Icons) 
 
 **Backend:**
 * Node.js + Express.js
@@ -43,6 +43,8 @@ Vizhi Teams is a premium, full-stack employee management and productivity portal
 * PostgreSQL (Database)
 * JSON Web Tokens (JWT Auth)
 
+**Hosting:**
+*Firebase
 ---
 
 ## 🚀 Getting Started
