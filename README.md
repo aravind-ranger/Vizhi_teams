@@ -1,4 +1,4 @@
-# 🚀 Vizhi Teams - Employee Work Portal
+# 🚀 Vizhi Teams - Work Management Portal
 
 Vizhi Teams is a premium, full-stack employee management and productivity portal. It is designed to streamline team collaboration, track attendance, and manage projects through an intuitive, highly interactive dashboard.
 
