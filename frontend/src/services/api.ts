@@ -12,7 +12,7 @@ api.interceptors.request.use(async (config) => {
     const user = auth.currentUser;
     if (user) {
       const token = (user as any).stsTokenManager?.accessToken || (await user.getIdToken());
-      config.headers = config.headers || {};
+      config.headers = config.headers || {} as any;
       config.headers.Authorization = `Bearer ${token}`;
     }
   } catch (err) {
